@@ -13,6 +13,6 @@ load_ini.h
 
 #include "structures.h"
 
-int load_ini(conf *config);
+int load_ini(bounds *bconf);
 
 #endif // LOAD_INI_H_INCLUDED

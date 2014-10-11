@@ -34,7 +34,7 @@ int main(int argc, char **argv)
     int rc = 0;
     int db_size = 0;
     mvalue_ptr *db_values = NULL;
-    conf config;
+    bounds config;
 
     if (argc < 2)
     {

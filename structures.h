@@ -24,32 +24,32 @@ typedef struct
 
 typedef struct
 {
-    signed char pmin;
-    signed char pmax;
+    float pmin;
+    float pmax;
     float cgmin;
     float cgmax;
-    signed char cmin;
-    signed char cmax;
+    float cmin;
+    float cmax;
 
-    signed char ppmin;
-    signed char ppmax;
-    signed char cgpmin;
-    signed char cfpmax;
-    signed char cpmin;
-    signed char cpmax;
+    float ppmin;
+    float ppmax;
+    float cgpmin;
+    float cgpmax;
+    float cpmin;
+    float cpmax;
 
     float dtmin;
     float dtmax;
     float hmin;
     float hmax;
 
-    signed char kmin;
-    signed char kmax;
+    float kmin;
+    float kmax;
 
-    signed char mmin;
-    signed char mmax;
-    signed char nmin;
-    signed char nmax;
-} conf;
+    float mmin;
+    float mmax;
+    float nmin;
+    float nmax;
+} bounds;
 
 #endif // STRUCTURES_H_INCLUDED
