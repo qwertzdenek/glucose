@@ -24,6 +24,22 @@ typedef struct
 
 typedef struct
 {
+    float p;
+    float cg;
+    float c;
+    float pp;
+    float cgp;
+    float cp;
+    float dt;
+    float h;
+    float k;
+    float m;
+    float n;
+    float fitness;
+} member;
+
+typedef struct
+{
     float pmin;
     float pmax;
     float cgmin;

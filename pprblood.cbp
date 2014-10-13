@@ -46,6 +46,10 @@
 		<Unit filename="database.h">
 			<Option target="&lt;{~None~}&gt;" />
 		</Unit>
+		<Unit filename="evo.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="evo.h" />
 		<Unit filename="load_ini.c">
 			<Option compilerVar="CC" />
 		</Unit>

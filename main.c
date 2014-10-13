@@ -15,6 +15,7 @@ main.c
 #include "database.h"
 #include "approx.h"
 #include "load_ini.h"
+#include "evo.h"
 
 void free_array(mvalue_ptr *array, int size)
 {
@@ -34,7 +35,8 @@ int main(int argc, char **argv)
     int rc = 0;
     int db_size = 0;
     mvalue_ptr *db_values = NULL;
-    bounds config;
+    member members[POPULATION_SIZE];
+    bounds bconf;
 
     if (argc < 2)
     {
@@ -42,22 +44,22 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    // set universal locale (float use .)
+    setlocale(LC_NUMERIC,"C");
+
     // Config
     if (access(INI_FILE, R_OK) == -1) {
-        fprintf(stderr, "config file %s not found\n", INI_FILE);
+        fprintf(stderr, "bounds config file %s not found\n", INI_FILE);
         return -2;
     }
 
-    load_ini(&config);
+    load_ini(&bconf);
 
     // Database
     if (access(argv[1], R_OK) == -1) {
         fprintf(stderr, "database file %s not found\n", argv[1]);
         return -1;
     }
-
-    // set universal locale (float use .)
-    setlocale(LC_NUMERIC,"C");
 
     rc = init_data(argv[1], &db_values, &db_size);
     if (rc == 0)
@@ -68,6 +70,9 @@ int main(int argc, char **argv)
     filter(db_values, db_size);
 
     // TODO: compute best parametres
+    evolution(db_values, db_size, bconf, members);
+
+    //print_results(members);
 
     // exit and clean up
     free_array(db_values, db_size);
