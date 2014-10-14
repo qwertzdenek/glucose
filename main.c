@@ -69,7 +69,6 @@ int main(int argc, char **argv)
 
     filter(db_values, db_size);
 
-    // TODO: compute best parametres
     evolution(db_values, db_size, bconf, members);
 
     //print_results(members);

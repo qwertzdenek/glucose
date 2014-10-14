@@ -111,9 +111,54 @@ void init_population(member members[], bounds bc)
     }
 }
 
-float finess(member m)
+float finess(mvalue_ptr *db_values, int db_size, member m)
 {
-    // TODO
+    int i, j;
+    float fit_sum;
+    float phi, psi, I, theta, left, right;
+    float itmh, ipm, ipdt;
+    mvalue act;
+
+    float a, b, c; // ist vals
+    float ta, tb, tc; // interpolated times
+
+    for (i = 0; i < db_size; i++)
+    {
+        for (j = 0; j < db_values[i].cvals; j++)
+        {
+            act = db_values[i].vals[j];
+
+            // phi
+            a = db_values[i].vals[j-1].ist;
+            ta = db_values[i].vals[j-1].time;
+            b = act.ist;
+            tb = act.time;
+            tc = act.time - m.h; // t - h
+            itmh = (tc - ta) / (tb - ta) * (b - a) + a; // i(t - h)
+
+            phi = (act.ist - itmh) / m.h;
+
+            // others
+            psi = act.blood * (act.blood - act.ist);
+            I = m.p * act.blood + m.cg * psi + m.c;
+            theta = phi * (m.pp * act.blood + m.cgp * psi + m.cp);
+
+            left = I + theta; // !!!
+
+            a = act.ist;
+            ta = act.time;
+            b = db_values[i].vals[j+1].ist;
+            tb = db_values[i].vals[j+1].time;
+            tc = act.time + m.dt + k*phi;
+            ipm = (tc - ta) / (tb - ta) * (b - a) + a;
+            tc = act.time + m.dt;
+            ipdt = (tc - ta) / (tb - ta) * (b - a) + a;
+
+            right = m.m * ipm + m.n * ipdt;
+
+            // TODO: vyhodnocení
+        }
+    }
 }
 
 void evolution(mvalue_ptr *db_values, int db_size, bounds bconf, member members[])
@@ -141,7 +186,7 @@ void evolution(mvalue_ptr *db_values, int db_size, bounds bconf, member members[
             cross_m(op_vec, members[j], &op_vec);
 
             // fitnes zkušebního vektoru a porovnan s cílovým
-            float new_fit = fitnes(op_vec);
+            float new_fit = fitnes(db_values, db_size, op_vec);
             if (new_fit < members[j].fitness)
                 members[j] = op_vec;
 
