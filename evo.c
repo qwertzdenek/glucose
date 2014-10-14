@@ -8,17 +8,46 @@
 const float F = 0.75; // mutation constant
 const float CR = 0.5; // threshold
 
-// křížení podle CR
-void cross_ev()
+void mult(member a, float f, member *res)
 {
+    int i;
+    float *resptr = (float *) res;
+    float *aptr = (float *) &a;
 
+    // member has 12 floats and unknown fitness
+    for (i = 0; i < 11; i++)
+    {
+        *resptr = *aptr * f;
+        resptr++;
+        aptr++;
+    }
+
+    res->fitness = 0.0f;
+}
+
+void add(member a, member b, member *res)
+{
+    int i;
+    float *resptr = (float *) res;
+    float *aptr = (float *) &a;
+    float *bptr = (float *) &b;
+
+    // member has 12 floats and unknown fitness
+    for (i = 0; i < 11; i++)
+    {
+        *resptr = *bptr + *aptr;
+        resptr++;
+        aptr++;
+        bptr++;
+    }
+
+    res->fitness = 0.0f;
 }
 
 void diff(member a, member b, member *res)
 {
-    member res;
     int i;
-    float *resptr = (float *) &res;
+    float *resptr = (float *) res;
     float *aptr = (float *) &a;
     float *bptr = (float *) &b;
 
@@ -31,14 +60,32 @@ void diff(member a, member b, member *res)
         bptr++;
     }
 
-    res.fitness = 0.0f;
-
-    return res;
+    res->fitness = 0.0f;
 }
 
-inline float interp(float val, float a, float b)
+float interp(float val, float a, float b)
 {
     return (b - a) * val + a;
+}
+
+void cross_m(member a, member b, member *res)
+{
+    int i;
+    float rco;
+    float *resptr = (float *) res;
+    float *aptr = (float *) &a;
+    float *bptr = (float *) &b;
+
+    for (i = 0; i < 11; i++)
+    {
+        rco = (float) rand() / RAND_MAX;
+        *resptr = rco < CR ? *aptr : *bptr
+        resptr++;
+        aptr++;
+        bptr++;
+    }
+
+    res->fitness = 0.0f;
 }
 
 void init_population(member members[], bounds bc)
@@ -64,12 +111,16 @@ void init_population(member members[], bounds bc)
     }
 }
 
+float finess(member m)
+{
+    // TODO
+}
+
 void evolution(mvalue_ptr *db_values, int db_size, bounds bconf, member members[])
 {
     int i, j;
     int a, b, c;
     member op_vec;
-    member test_vector;
 
     srand(getpid());
     init_population(members, bconf);
@@ -87,7 +138,13 @@ void evolution(mvalue_ptr *db_values, int db_size, bounds bconf, member members[
             add(members[c], op_vec, &op_vec);      // -> noise vector
 
             // TODO: křížení šumového a cílového cektoru j -> zkušební vektor
+            cross_m(op_vec, members[j], &op_vec);
+
             // fitnes zkušebního vektoru a porovnan s cílovým
+            float new_fit = fitnes(op_vec);
+            if (new_fit < members[j].fitness)
+                members[j] = op_vec;
+
             // vede se statistika nejlepšího jedince v generaci
         }
     }
