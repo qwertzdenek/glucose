@@ -30,6 +30,20 @@ void free_array(mvalue_ptr *array, int size)
         free(array);
 }
 
+#ifndef DEBUG
+void print_array(member a[], int s)
+{
+    int i;
+
+    for (i = 0; i < s; i++)
+    {
+        printf("[%f %f %f %f %f %f %f %f %f %f %f %f]\n", a[i].p, a[i].cg, a[i].c, a[i].pp, a[i].cgp, a[i].cp, a[i].dt, a[i].h, a[i].k, a[i].m, a[i].n, a[i].fitness);
+    }
+
+    printf("\n");
+}
+#endif // DEBUG
+
 int main(int argc, char **argv)
 {
     int rc = 0;
@@ -71,7 +85,7 @@ int main(int argc, char **argv)
 
     evolution(db_values, db_size, bconf, members);
 
-    //print_results(members);
+    print_array(members, POPULATION_SIZE);
 
     // exit and clean up
     free_array(db_values, db_size);

@@ -44,7 +44,7 @@ void filter(mvalue_ptr *val, int cval)
             k = j;
             while (val[i].vals[k].ist == 0.0f && k < val[i].cvals - 1)
                 k++;
-            b = val[i].vals[k].ist
+            b = val[i].vals[k].ist;
             tb = val[i].vals[k].time;
 
             val[i].vals[ncvals].ist = (tc - ta) / (tb - ta) * (b - a) + a;
