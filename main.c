@@ -10,6 +10,7 @@ main.c
 #include <stdlib.h>
 #include <locale.h>
 #include <unistd.h>
+#include <math.h>
 
 #include "opencl_target.h"
 #include "database.h"

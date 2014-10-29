@@ -7,26 +7,48 @@ approx.c
 */
 
 #include <stdio.h>
+#include <math.h>
 
 #include "structures.h"
 
-void filter(mvalue_ptr *val, int cval)
+void filter(mvalue_ptr *val, int db_size)
 {
-    int i, j, k;
+    int i, j;
     int ncvals;
+    int last_ist;
+    int next_ist;
+
     float a, b; // ist vals
     float ta, tb, tc; // interpolated times
+    float ist;
 
-    for (i = 0; i < cval; i++)
+    for (i = 0; i < db_size; i++)
     {
         ncvals = 0;
         j = 0;
+        last_ist = -1;
+        next_ist = -1;
 
+        // skip first blood values without ist
+        while (val[i].vals[j].blood > 0.0f && j < val[i].cvals)
+            j++;
 
         while (j < val[i].cvals)
         {
-            while (val[i].vals[j].blood == 0.0f && j < val[i].cvals - 1)
+            // search for the blood value
+            while (val[i].vals[j].blood == 0.0f && j < val[i].cvals)
+            {
+                last_ist = j;
                 j++;
+            } // -> j - blood index, last_ist - ist value from the left side
+
+            // search for the next ist value
+            next_ist = j + 1;
+            while (val[i].vals[next_ist].ist == 0.0f && next_ist < val[i].cvals)
+                next_ist++;
+
+            if (next_ist >= val[i].cvals)
+                break;
 
             val[i].vals[ncvals].blood = val[i].vals[j].blood;
             val[i].vals[ncvals].time = val[i].vals[j].time;
@@ -36,24 +58,20 @@ void filter(mvalue_ptr *val, int cval)
             |----|----|
             ta  tc   tb
             */
-            a = val[i].vals[j - 1].ist;
-            ta = val[i].vals[j - 1].time;
+            a = val[i].vals[last_ist].ist;
+            ta = val[i].vals[last_ist].time;
+            b = val[i].vals[next_ist].ist;
+            tb = val[i].vals[next_ist].time;
+
             tc = val[i].vals[j].time;
 
-            // search for the next ist value
-            k = j;
-            while (val[i].vals[k].ist == 0.0f && k < val[i].cvals - 1)
-                k++;
-            b = val[i].vals[k].ist;
-            tb = val[i].vals[k].time;
+            ist = (tc - ta) / (tb - ta) * (b - a) + a;
 
-            val[i].vals[ncvals].ist = (tc - ta) / (tb - ta) * (b - a) + a;
+            if (!isnan(ist))
+                val[i].vals[ncvals++].ist = ist;
 
             j++;
-            ncvals++;
         }
-
-        printf("segment %d: %d values -> %d\n", i+1, val[i].cvals, ncvals);
 
         val[i].cvals = ncvals;
     }

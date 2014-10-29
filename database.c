@@ -52,7 +52,7 @@ int cb_value(void *id_ptr, int argc, char **argv, char **azColName)
     db_private[id].vals[vc].blood = argv[1] == NULL ? 0.0f : strtof(argv[1], &endptr);
     db_private[id].vals[vc].ist = argv[2] == NULL ? 0.0f : strtof(argv[2], &endptr);
 
-    // printf("%d: %.5f blood=%.2f ist=%.2f\n", id, db_private[id].vals[vc].time, db_private[id].vals[vc].blood, db_private[id].vals[vc].ist);
+    //printf("%d: %.5f blood=%.2f ist=%.2f\n", id, db_private[id].vals[vc].time, db_private[id].vals[vc].blood, db_private[id].vals[vc].ist);
 
     db_private[id].cvals++;
 

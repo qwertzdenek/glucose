@@ -1,3 +1,11 @@
+/*
+The MIT License (MIT)
+Copyright (c) 2014 Zdeněk Janeček
+
+** Glucose project**
+evo.c
+*/
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -134,7 +142,8 @@ float fitness(mvalue_ptr *db_values, int db_size, member *m)
 {
     int i, j;
     float segment_sum;
-    float fit_sum;
+    float avg_fit;
+    float new_fit;
     float phi, psi, I, theta, left, right;
     float itmh, ipm, ipdt;
     mvalue act;
@@ -142,14 +151,23 @@ float fitness(mvalue_ptr *db_values, int db_size, member *m)
     float a, b; // ist vals
     float ta, tb, tc; // interpolated times
 
-    int tmpj; // tmp values for segment searching
+    int sign;
 
-    fit_sum = 0;
+    int tmpj; // tmp values for value searching
+
+    avg_fit = 0;
     for (i = 0; i < db_size; i++)
     {
         segment_sum = 0;
+
+        if (db_values[i].cvals < 3)
+            continue;
+
         for (j = 1; j < db_values[i].cvals - 1; j++)
         {
+
+            // TODO: ošetřit konce
+
             // phi
             ta = db_values[i].vals[j-1].time;
             tc = db_values[i].vals[j].time - m->h; // i(t - h)
@@ -181,22 +199,40 @@ float fitness(mvalue_ptr *db_values, int db_size, member *m)
             left = I + theta; // !!!
 
             // ** RIGHT
-            tb = db_values[i].vals[j+1].time;
+            ta = db_values[i].vals[j].time;
             tc = db_values[i].vals[j].time + m->dt + m->k*phi;
 
-            tmpj = j + 1;
-            while (tc > tb && tmpj < (db_values[i].cvals - 1))
-                tb = db_values[i].vals[++tmpj].time;
+            sign = (int) copysignf(1.0, tc - ta);
 
-            tmpj = tmpj - 1;
+            switch (sign)
+            {
+            case 1:
+                tmpj = j + 1;
+                tb = db_values[i].vals[tmpj].time;
+                while (tc > tb && tmpj < (db_values[i].cvals - 1))
+                    tb = db_values[i].vals[++tmpj].time;
 
-            ta = db_values[i].vals[tmpj].time;
-            a = db_values[i].vals[tmpj].time;
+                tmpj = tmpj - 1;
+
+                ta = db_values[i].vals[tmpj].time;
+                break;
+
+            case -1:
+                tmpj = j - 1;
+                ta = db_values[i].vals[tmpj].time;
+                while (tc < ta && tmpj > 0)
+                    ta = db_values[i].vals[--tmpj].time;
+
+                tb = db_values[i].vals[tmpj + 1].time;
+                break;
+            } // tmpj -> a, tmpj + 1 -> b
+
+            a = db_values[i].vals[tmpj].ist;
             b = db_values[i].vals[tmpj+1].ist;
 
             ipm = (tc - ta) / (tb - ta) * (b - a) + a;
-
-
+            if (isnan(ipm))
+                printf("isnan\n");
 
             tb = db_values[i].vals[j+1].time;
             tc = act.time + m->dt; // i(t+dt)
@@ -208,23 +244,23 @@ float fitness(mvalue_ptr *db_values, int db_size, member *m)
             tmpj = tmpj - 1;
 
             ta = db_values[i].vals[tmpj].time;
-            a = db_values[i].vals[tmpj].time;
+            a = db_values[i].vals[tmpj].ist;
             b = db_values[i].vals[tmpj+1].ist;
 
             ipdt = (tc - ta) / (tb - ta) * (b - a) + a;
 
             right = m->m * ipm + m->n * ipdt;
 
-            segment_sum += right * right - left * left;
+            segment_sum += fabs(right) - fabs(left);
         }
 
-        fit_sum += segment_sum / db_values[i].cvals;
+        new_fit = segment_sum / db_values[i].cvals;
+        avg_fit = avg_fit * i / (i + 1) + new_fit / (i + 1);
     }
 
-    m->fitness = fit_sum;
-    printf("member %f: %f -> %f\n", m->p, fit_sum, m->fitness);
+    m->fitness = avg_fit;
 
-    return fit_sum;
+    return avg_fit;
 }
 
 void evolution(mvalue_ptr *db_values, int db_size, bounds bconf, member members[])
@@ -236,10 +272,10 @@ void evolution(mvalue_ptr *db_values, int db_size, bounds bconf, member members[
     srand(getpid());
     init_population(members, bconf);
 
-    #ifdef DEBUG
+#ifdef DEBUG
     printf("DEBUG: before evolution\n");
     print_array(members, POPULATION_SIZE);
-    #endif // DEBUG
+#endif // DEBUG
 
     for (i = 0; i < GENERATION_COUNT; i++)
     {
@@ -249,19 +285,19 @@ void evolution(mvalue_ptr *db_values, int db_size, bounds bconf, member members[
             b = (int) (((float) rand() / RAND_MAX) * (POPULATION_SIZE - 1));
             c = (int) (((float) rand() / RAND_MAX) * (POPULATION_SIZE - 1));
 
-            diff(&members[a], &members[b], &op_vec); // -> diff vector
+            diff(members + a, members + b, &op_vec); // -> diff vector
             mult(&op_vec, F, &op_vec);              // -> weighted diff vector
-            add(&members[c], &op_vec, &op_vec);      // -> noise vector
+            add(members + c, &op_vec, &op_vec);      // -> noise vector
 
             // TODO: křížení šumového a cílového cektoru j -> zkušební vektor
-            cross_m(&op_vec, &members[j], &op_vec);
+            cross_m(&op_vec, members + j, &op_vec);
 
             // TODO: oříznout podle mezí
 
             // fitness zkušebního vektoru a porovnan s cílovým
             float new_fit = fitness(db_values, db_size, &op_vec);
             if (new_fit < members[j].fitness)
-                memcpy(&members[j], &op_vec, sizeof(member));
+                memcpy(members + j, &op_vec, sizeof(member));
 
             // vede se statistika nejlepšího jedince v generaci
         }

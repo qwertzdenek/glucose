@@ -1,3 +1,11 @@
+/*
+The MIT License (MIT)
+Copyright (c) 2014 Zdeněk Janeček
+
+** Glucose project**
+evo.h
+*/
+
 #ifndef EVO_H_INCLUDED
 #define EVO_H_INCLUDED
 
