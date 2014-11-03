@@ -25,9 +25,15 @@ void filter(mvalue_ptr *val, int db_size)
     for (i = 0; i < db_size; i++)
     {
         ncvals = 0;
-        j = 0;
+        j = 1;
         last_ist = -1;
         next_ist = -1;
+
+        // insert left bound value because of aproximation
+        val[i].vals[0].time = 1.0f;
+        val[i].vals[0].blood = 1.0f;
+        val[i].vals[0].ist = 1.0f;
+        ncvals++;
 
         // skip first blood values without ist
         while (val[i].vals[j].blood > 0.0f && j < val[i].cvals)
@@ -72,6 +78,12 @@ void filter(mvalue_ptr *val, int db_size)
 
             j++;
         }
+
+        // insert left bound value because of aproximation
+        val[i].vals[ncvals].time = 1.0f;
+        val[i].vals[ncvals].blood = 1.0f;
+        val[i].vals[ncvals].ist = 1.0f;
+        ncvals++;
 
         val[i].cvals = ncvals;
     }

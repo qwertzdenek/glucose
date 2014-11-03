@@ -163,20 +163,17 @@ float fitness(mvalue_ptr *db_values, int db_size, member *m)
         if (db_values[i].cvals < 3)
             continue;
 
-        for (j = 1; j < db_values[i].cvals - 1; j++)
+        for (j = 2; j < db_values[i].cvals - 2; j++)
         {
-
-            // TODO: ošetřit konce
-
             // phi
             ta = db_values[i].vals[j-1].time;
             tc = db_values[i].vals[j].time - m->h; // i(t - h)
 
-            if (tc < db_values[i].vals[0].time)
-                continue;
+            //if (tc < db_values[i].vals[0].time)
+            //    continue;
 
             tmpj = j - 1;
-            while (tc < ta && tmpj > 0)
+            while (tc <= ta && tmpj > 0)
                 ta = db_values[i].vals[--tmpj].time;
 
             tmpj = tmpj + 1;
@@ -186,6 +183,8 @@ float fitness(mvalue_ptr *db_values, int db_size, member *m)
             a = db_values[i].vals[tmpj-1].ist;
 
             itmh = (tc - ta) / (tb - ta) * (b - a) + a; // i(t - h)
+            if (isnan(itmh))
+                printf("isnan\n");
 
             act = db_values[i].vals[j];
 
@@ -209,7 +208,7 @@ float fitness(mvalue_ptr *db_values, int db_size, member *m)
             case 1:
                 tmpj = j + 1;
                 tb = db_values[i].vals[tmpj].time;
-                while (tc > tb && tmpj < (db_values[i].cvals - 1))
+                while (tc > tb && tmpj < (db_values[i].cvals - 2))
                     tb = db_values[i].vals[++tmpj].time;
 
                 tmpj = tmpj - 1;
@@ -231,14 +230,12 @@ float fitness(mvalue_ptr *db_values, int db_size, member *m)
             b = db_values[i].vals[tmpj+1].ist;
 
             ipm = (tc - ta) / (tb - ta) * (b - a) + a;
-            if (isnan(ipm))
-                printf("isnan\n");
 
             tb = db_values[i].vals[j+1].time;
             tc = act.time + m->dt; // i(t+dt)
 
             tmpj = j + 1;
-            while (tc > tb && tmpj < (db_values[i].cvals - 1))
+            while (tc > tb && tmpj < (db_values[i].cvals - 2))
                 tb = db_values[i].vals[++tmpj].time;
 
             tmpj = tmpj - 1;

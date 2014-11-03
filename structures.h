@@ -13,7 +13,7 @@ typedef struct
 {
     float blood;
     float ist;
-    double time;
+    float time;
 } mvalue;
 
 typedef struct
