@@ -12,7 +12,7 @@ evo.c
 #include <string.h>
 #include <float.h>
 
-#define GENERATION_COUNT 100
+#define GENERATION_COUNT 10
 
 #include <math.h>
 
@@ -22,6 +22,10 @@ const float F = 0.75; // mutation constant
 const float CR = 0.5; // threshold
 
 static inline float rfloat();
+
+// database
+mvalue_ptr *db_values;
+int db_size;
 
 void mult(member *a, float f, member *res)
 {
@@ -129,7 +133,7 @@ void init_population(member members[], bounds bc)
     }
 }
 
-float fitness(mvalue_ptr *db_values, int db_size, member *m)
+float fitness(member *m)
 {
     int i, j;
     float segment_sum;
@@ -248,15 +252,22 @@ float fitness(mvalue_ptr *db_values, int db_size, member *m)
     return avg_fit;
 }
 
-void evolution(mvalue_ptr *db_values, int db_size, bounds bconf, member members[])
+void evolution(mvalue_ptr *values, int size, bounds bconf, member members[])
 {
     int i, j;
     int a, b, c;
     member op_vec;
     float min_fit;
+    member members_new[POPULATION_SIZE];
+
+    db_values = values;
+    db_size = size;
 
     srand(getpid());
     init_population(members, bconf);
+
+    // initialize new generation buffer
+    memcpy((member *) members_new, (member *) members, sizeof(member) * POPULATION_SIZE);
 
     for (i = 0; i < GENERATION_COUNT; i++)
     {
@@ -270,21 +281,21 @@ void evolution(mvalue_ptr *db_values, int db_size, bounds bconf, member members[
 
             diff(members + a, members + b, &op_vec); // -> diff vector
             mult(&op_vec, F, &op_vec);              // -> weighted diff vector
-            add(members + c, &op_vec, &op_vec);      // -> noise vector
+            add(members + c, &op_vec, &op_vec);     // -> noise vector
 
-            // TODO: křížení šumového a cílového cektoru j -> zkušební vektor
             cross_m(&op_vec, members + j, &op_vec);
 
             // TODO: oříznout podle mezí
 
             // fitness zkušebního vektoru a porovnan s cílovým
-            float new_fit = fitness(db_values, db_size, &op_vec);
+            float new_fit = fitness(&op_vec);
             if (fabs(new_fit) < fabs(members[j].fitness))
-                memcpy(members + j, &op_vec, sizeof(member));
+                memcpy(members_new + j, &op_vec, sizeof(member));
 
-            min_fit = fminf(min_fit, members[j].fitness);
+            min_fit = fminf(min_fit, members_new[j].fitness);
         }
 
+        memcpy((member *) members, (member *) members_new, sizeof(member) * POPULATION_SIZE);
         printf("generace %d: %f\n", i, min_fit);
     }
 }
