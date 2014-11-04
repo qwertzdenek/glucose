@@ -30,9 +30,9 @@ void filter(mvalue_ptr *val, int db_size)
         next_ist = -1;
 
         // insert left bound value because of aproximation
-        val[i].vals[0].time = 1.0f;
-        val[i].vals[0].blood = 1.0f;
-        val[i].vals[0].ist = 1.0f;
+        val[i].vals[0].time = val[i].vals[0].time - 365.0;
+        val[i].vals[0].blood = 4.0f;
+        val[i].vals[0].ist = 4.0f;
         ncvals++;
 
         // skip first blood values without ist
@@ -47,6 +47,8 @@ void filter(mvalue_ptr *val, int db_size)
                 last_ist = j;
                 j++;
             } // -> j - blood index, last_ist - ist value from the left side
+
+            // TODO: check if value i is already there
 
             // search for the next ist value
             next_ist = j + 1;
@@ -80,9 +82,9 @@ void filter(mvalue_ptr *val, int db_size)
         }
 
         // insert left bound value because of aproximation
-        val[i].vals[ncvals].time = 1.0f;
-        val[i].vals[ncvals].blood = 1.0f;
-        val[i].vals[ncvals].ist = 1.0f;
+        val[i].vals[ncvals].time = val[i].vals[j-1].time + 365;
+        val[i].vals[ncvals].blood = 4.0f;
+        val[i].vals[ncvals].ist = 4.0f;
         ncvals++;
 
         val[i].cvals = ncvals;

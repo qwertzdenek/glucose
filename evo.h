@@ -11,7 +11,7 @@ evo.h
 
 #include "structures.h"
 
-#define POPULATION_SIZE 40
+#define POPULATION_SIZE 30
 
 void evolution(mvalue_ptr *db_values, int db_size, bounds bconf, member members[]);
 #ifdef DEBUG

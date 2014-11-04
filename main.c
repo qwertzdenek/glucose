@@ -31,7 +31,6 @@ void free_array(mvalue_ptr *array, int size)
         free(array);
 }
 
-#ifndef DEBUG
 void print_array(member a[], int s)
 {
     int i;
@@ -43,7 +42,6 @@ void print_array(member a[], int s)
 
     printf("\n");
 }
-#endif // DEBUG
 
 int main(int argc, char **argv)
 {

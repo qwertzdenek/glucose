@@ -109,7 +109,7 @@ int init_data(char *file, mvalue_ptr **db_values, int *cval)
         db_private[i].vals = (mvalue *) malloc(query_size * sizeof(mvalue));
         db_private[i].cvals = 0;
 
-        sprintf((char *) &query, "SELECT measuredat, blood, ist FROM measuredvalue WHERE segmentid==%d;", i + 1);
+        sprintf((char *) &query, "SELECT measuredat, blood, ist FROM measuredvalue WHERE segmentid==%d ORDER BY measuredat;", i + 1);
         rc = sqlite3_exec(db, (char *) query, cb_value, &i, &zErrMsg);
         if(rc != SQLITE_OK)
         {

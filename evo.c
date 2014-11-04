@@ -10,8 +10,9 @@ evo.c
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <float.h>
 
-#define GENERATION_COUNT 10
+#define GENERATION_COUNT 100
 
 #include <math.h>
 
@@ -19,6 +20,8 @@ evo.c
 
 const float F = 0.75; // mutation constant
 const float CR = 0.5; // threshold
+
+static inline float rfloat();
 
 void mult(member *a, float f, member *res)
 {
@@ -100,41 +103,29 @@ void cross_m(member *a, member *b, member *res)
     res->fitness = 0.0f;
 }
 
-#ifdef DEBUG
-void print_array(member a[], int s)
+static inline float rfloat()
 {
-    int i;
-
-    for (i = 0; i < s; i++)
-    {
-        printf("[%f %f %f %f %f %f %f %f %f %f %f %f]\n", a[i].p, a[i].cg, a[i].c, a[i].pp, a[i].cgp, a[i].cp, a[i].dt, a[i].h, a[i].k, a[i].m, a[i].n, a[i].fitness);
-    }
-
-    printf("\n");
+    return (float) rand() / RAND_MAX;
 }
-#endif // DEBUG
-
 
 void init_population(member members[], bounds bc)
 {
     int i;
-    float rco;
 
     for (i = 0; i < POPULATION_SIZE; i++)
     {
-        rco = (float) rand() / RAND_MAX;
-        members[i].p = interp(rco, bc.pmax, bc.pmin);
-        members[i].cg = interp(rco, bc.cgmax, bc.cgmin);
-        members[i].c = interp(rco, bc.cmax, bc.cmin);
-        members[i].pp = interp(rco, bc.ppmax, bc.ppmin);
-        members[i].cgp = interp(rco, bc.cgpmax, bc.cgpmin);
-        members[i].cp = interp(rco, bc.cpmax, bc.cpmin);
-        members[i].dt = interp(rco, bc.dtmax, bc.dtmin);
-        members[i].h = interp(rco, bc.hmax, bc.hmin);
-        members[i].k = interp(rco, bc.kmax, bc.kmin);
-        members[i].m = interp(rco, bc.mmax, bc.mmin);
-        members[i].n = interp(rco, bc.nmax, bc.nmin);
-        members[i].fitness = 0.0f;
+        members[i].p = interp(rfloat(), bc.pmax, bc.pmin);
+        members[i].cg = interp(rfloat(), bc.cgmax, bc.cgmin);
+        members[i].c = interp(rfloat(), bc.cmax, bc.cmin);
+        members[i].pp = interp(rfloat(), bc.ppmax, bc.ppmin);
+        members[i].cgp = interp(rfloat(), bc.cgpmax, bc.cgpmin);
+        members[i].cp = interp(rfloat(), bc.cpmax, bc.cpmin);
+        members[i].dt = interp(rfloat(), bc.dtmax, bc.dtmin);
+        members[i].h = interp(rfloat(), bc.hmax, bc.hmin);
+        members[i].k = interp(rfloat(), bc.kmax, bc.kmin);
+        members[i].m = interp(rfloat(), bc.mmax, bc.mmin);
+        members[i].n = interp(rfloat(), bc.nmax, bc.nmin);
+        members[i].fitness = FLT_MAX;
     }
 }
 
@@ -160,6 +151,8 @@ float fitness(mvalue_ptr *db_values, int db_size, member *m)
     {
         segment_sum = 0;
 
+        //printf("i=%d len=%d\n", i, db_values[i].cvals);
+
         if (db_values[i].cvals < 3)
             continue;
 
@@ -168,9 +161,6 @@ float fitness(mvalue_ptr *db_values, int db_size, member *m)
             // phi
             ta = db_values[i].vals[j-1].time;
             tc = db_values[i].vals[j].time - m->h; // i(t - h)
-
-            //if (tc < db_values[i].vals[0].time)
-            //    continue;
 
             tmpj = j - 1;
             while (tc <= ta && tmpj > 0)
@@ -183,8 +173,6 @@ float fitness(mvalue_ptr *db_values, int db_size, member *m)
             a = db_values[i].vals[tmpj-1].ist;
 
             itmh = (tc - ta) / (tb - ta) * (b - a) + a; // i(t - h)
-            if (isnan(itmh))
-                printf("isnan\n");
 
             act = db_values[i].vals[j];
 
@@ -208,7 +196,7 @@ float fitness(mvalue_ptr *db_values, int db_size, member *m)
             case 1:
                 tmpj = j + 1;
                 tb = db_values[i].vals[tmpj].time;
-                while (tc > tb && tmpj < (db_values[i].cvals - 2))
+                while (tc > tb && tmpj < (db_values[i].cvals - 1))
                     tb = db_values[i].vals[++tmpj].time;
 
                 tmpj = tmpj - 1;
@@ -235,7 +223,7 @@ float fitness(mvalue_ptr *db_values, int db_size, member *m)
             tc = act.time + m->dt; // i(t+dt)
 
             tmpj = j + 1;
-            while (tc > tb && tmpj < (db_values[i].cvals - 2))
+            while (tc > tb && tmpj < (db_values[i].cvals - 1))
                 tb = db_values[i].vals[++tmpj].time;
 
             tmpj = tmpj - 1;
@@ -265,17 +253,15 @@ void evolution(mvalue_ptr *db_values, int db_size, bounds bconf, member members[
     int i, j;
     int a, b, c;
     member op_vec;
+    float min_fit;
 
     srand(getpid());
     init_population(members, bconf);
 
-#ifdef DEBUG
-    printf("DEBUG: before evolution\n");
-    print_array(members, POPULATION_SIZE);
-#endif // DEBUG
-
     for (i = 0; i < GENERATION_COUNT; i++)
     {
+        min_fit = FLT_MAX;
+
         for (j = 0; j < POPULATION_SIZE; j++)
         {
             a = (int) (((float) rand() / RAND_MAX) * (POPULATION_SIZE - 1));
@@ -293,10 +279,12 @@ void evolution(mvalue_ptr *db_values, int db_size, bounds bconf, member members[
 
             // fitness zkušebního vektoru a porovnan s cílovým
             float new_fit = fitness(db_values, db_size, &op_vec);
-            if (new_fit < members[j].fitness)
+            if (fabs(new_fit) < fabs(members[j].fitness))
                 memcpy(members + j, &op_vec, sizeof(member));
 
-            // vede se statistika nejlepšího jedince v generaci
+            min_fit = fminf(min_fit, members[j].fitness);
         }
+
+        printf("generace %d: %f\n", i, min_fit);
     }
 }
