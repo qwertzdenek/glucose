@@ -11,21 +11,34 @@ evo.c
 #include <unistd.h>
 #include <string.h>
 #include <float.h>
+#include <pthread.h>
 
-#define GENERATION_COUNT 10
+#define GENERATION_COUNT 1000
 
 #include <math.h>
 
 #include "evo.h"
 
 const float F = 0.75; // mutation constant
-const float CR = 0.5; // threshold
+const float CR = 0.3; // threshold
 
 static inline float rfloat();
 
 // database
 mvalue_ptr *db_values;
 int db_size;
+get_metric_func get_metric;
+member members[POPULATION_SIZE];
+member members_new[POPULATION_SIZE];
+
+#define TRUE 1
+#define FALSE 0
+#define T_WAIT -1
+
+#define T_COUNT 4
+pthread_t workers[T_COUNT];
+int tasks[T_COUNT];
+int running[T_COUNT];
 
 void mult(member *a, float f, member *res)
 {
@@ -109,7 +122,18 @@ void cross_m(member *a, member *b, member *res)
 
 static inline float rfloat()
 {
-    return (float) rand() / RAND_MAX;
+    float f = (float) rand() / RAND_MAX;
+    return f;
+}
+
+float metric_abs(float left, float right)
+{
+    return fabs(left) - fabs(right);
+}
+
+float metric_square(float left, float right)
+{
+    return left*left - right*right;
 }
 
 void init_population(member members[], bounds bc)
@@ -133,7 +157,7 @@ void init_population(member members[], bounds bc)
     }
 }
 
-float fitness(member *m)
+void fitness(member *m)
 {
     int i, j;
     float segment_sum;
@@ -240,7 +264,7 @@ float fitness(member *m)
 
             right = m->m * ipm + m->n * ipdt;
 
-            segment_sum += fabs(right) - fabs(left);
+            segment_sum += get_metric(left, right);
         }
 
         new_fit = segment_sum / db_values[i].cvals;
@@ -248,20 +272,19 @@ float fitness(member *m)
     }
 
     m->fitness = avg_fit;
-
-    return avg_fit;
 }
 
-void evolution(mvalue_ptr *values, int size, bounds bconf, member members[])
+void evolution_serial(mvalue_ptr *values, int size, bounds bconf, get_metric_func mfun)
 {
     int i, j;
     int a, b, c;
+    float new_fit;
     member op_vec;
     float min_fit;
-    member members_new[POPULATION_SIZE];
 
     db_values = values;
     db_size = size;
+    get_metric = mfun;
 
     srand(getpid());
     init_population(members, bconf);
@@ -271,8 +294,6 @@ void evolution(mvalue_ptr *values, int size, bounds bconf, member members[])
 
     for (i = 0; i < GENERATION_COUNT; i++)
     {
-        min_fit = FLT_MAX;
-
         for (j = 0; j < POPULATION_SIZE; j++)
         {
             a = (int) (((float) rand() / RAND_MAX) * (POPULATION_SIZE - 1));
@@ -285,17 +306,147 @@ void evolution(mvalue_ptr *values, int size, bounds bconf, member members[])
 
             cross_m(&op_vec, members + j, &op_vec);
 
-            // TODO: oříznout podle mezí
-
             // fitness zkušebního vektoru a porovnan s cílovým
-            float new_fit = fitness(&op_vec);
+            fitness(&op_vec);
+            new_fit = op_vec.fitness;
             if (fabs(new_fit) < fabs(members[j].fitness))
                 memcpy(members_new + j, &op_vec, sizeof(member));
-
-            min_fit = fminf(min_fit, members_new[j].fitness);
         }
 
         memcpy((member *) members, (member *) members_new, sizeof(member) * POPULATION_SIZE);
-        printf("generace %d: %f\n", i, min_fit);
     }
+
+    min_fit = FLT_MAX;
+    for (i = 0; i < POPULATION_SIZE; i++)
+    {
+        if (fabs(members[i].fitness) < fabs(min_fit))
+        {
+            min_fit = members[i].fitness;
+            op_vec = members[i];
+        }
+    }
+
+    printf("best [%f %f %f %f %f %f %f %f %f %f %f %f]\n",
+           op_vec.p, op_vec.cg, op_vec.c, op_vec.pp, op_vec.cgp, op_vec.cp,
+           op_vec.dt, op_vec.h, op_vec.k, op_vec.m, op_vec.n, op_vec.fitness);
+}
+
+void *work_task(void *par)
+{
+    int a, b, c;
+    float new_fit;
+    member op_vec;
+    int index = (int) par;
+    int act;
+
+    while (running[index])
+    {
+        // wait for new task
+        while (tasks[index] == T_WAIT)
+            ;
+
+        act = tasks[index];
+
+        printf("%d computing %d\n", index, act);
+
+        a = (int) (((float) rand() / RAND_MAX) * (POPULATION_SIZE - 1));
+        b = (int) (((float) rand() / RAND_MAX) * (POPULATION_SIZE - 1));
+        c = (int) (((float) rand() / RAND_MAX) * (POPULATION_SIZE - 1));
+
+        diff(members + a, members + b, &op_vec); // -> diff vector
+        mult(&op_vec, F, &op_vec);              // -> weighted diff vector
+        add(members + c, &op_vec, &op_vec);     // -> noise vector
+
+        cross_m(&op_vec, members + act, &op_vec);
+
+        fitness(&op_vec);
+        new_fit = op_vec.fitness;
+        if (fabs(new_fit) < fabs(members[act].fitness))
+            memcpy(members_new + act, &op_vec, sizeof(member));
+
+        tasks[index] = T_WAIT;
+    }
+
+    pthread_exit(NULL);
+}
+
+void evolution_pthread(mvalue_ptr *values, int size, bounds bconf, get_metric_func mfun)
+{
+    int i, j, k;
+    float min_fit;
+    pthread_attr_t attr;
+    member bm;
+    int jwait;
+
+    db_values = values;
+    db_size = size;
+    get_metric = mfun;
+
+    memset(&bm, 0, sizeof(member));
+
+    /* create threads */
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+    srand(getpid());
+    init_population(members, bconf);
+
+    // initialize new generation buffer
+    memcpy((member *) members_new, (member *) members, sizeof(member) * POPULATION_SIZE);
+
+    for (k = 0; k < T_COUNT; k++)
+    {
+        running[k] = TRUE;
+        tasks[k] = T_WAIT;
+        pthread_create(&workers[k], &attr, work_task, k);
+    }
+
+    for (i = 0; i < GENERATION_COUNT; i++)
+    {
+        for (j = 0; j < POPULATION_SIZE; j++)
+        {
+            jwait = TRUE;
+
+            // check threads
+            while (jwait)
+            {
+                for (k = 0; k < T_COUNT; k++)
+                {
+                    if (tasks[k] == T_WAIT)
+                    {
+                        printf("starting %d with %d\n", k, j);
+                        tasks[k] = j;
+                        jwait = FALSE;
+                        break;
+                    }
+                }
+            }
+        }
+
+        memcpy((member *) members, (member *) members_new, sizeof(member) * POPULATION_SIZE);
+    }
+
+    for (k = 0; k < T_COUNT; k++)
+    {
+        printf("stopping %d\n", k);
+        running[k] = FALSE;
+        tasks[k] = k;
+        pthread_join(workers[k], NULL);
+    }
+
+    pthread_attr_destroy(&attr);
+
+    min_fit = FLT_MAX;
+    for (i = 0; i < POPULATION_SIZE; i++)
+    {
+        if (fabs(members[i].fitness) < fabs(min_fit))
+        {
+            min_fit = members[i].fitness;
+            bm = members[i];
+        }
+    }
+
+    printf("best [%f %f %f %f %f %f %f %f %f %f %f %f]\n",
+           bm.p, bm.cg, bm.c, bm.pp, bm.cgp, bm.cp,
+           bm.dt, bm.h, bm.k, bm.m, bm.n, bm.fitness);
 }

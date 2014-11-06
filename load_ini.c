@@ -40,16 +40,17 @@ int next_var(FILE *fp, struct symbol *sym)
     char ctest;
     char *ptr = sym->name;
 
-    do
-    {
-        ctest = fgetc(fp);
-    }
-    while (isspace(ctest));
+    while (isspace(ctest = fgetc(fp)))
+            ;
+
+    fseek(fp, -1, SEEK_CUR);
 
     if (ctest == EOF)
         return 0;
 
-    fseek(fp, -1, SEEK_CUR);
+    if (ctest == ';')
+        while ((ctest = fgetc(fp)) != 10)
+            ;
 
     // read name
     while (((*ptr = (char) fgetc(fp)) != '=') && (ptr < (sym->name + MAX_LINE)))

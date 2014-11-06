@@ -22,6 +22,7 @@
 				<Option object_output="obj/Release/" />
 				<Option type="1" />
 				<Option compiler="opencl_compiler" />
+				<Option parameters="data.sqlite3" />
 				<Compiler>
 					<Add option="-O2" />
 				</Compiler>

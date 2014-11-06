@@ -36,13 +36,13 @@ void filter(mvalue_ptr *val, int db_size)
         ncvals++;
 
         // skip first blood values without ist
-        while (val[i].vals[j].blood > 0.0f && j < val[i].cvals)
+        while (j < val[i].cvals && val[i].vals[j].blood > 0.0f)
             j++;
 
         while (j < val[i].cvals)
         {
             // search for the blood value
-            while (val[i].vals[j].blood == 0.0f && j < val[i].cvals)
+            while (j < val[i].cvals && val[i].vals[j].blood == 0.0f)
             {
                 last_ist = j;
                 j++;
@@ -52,7 +52,7 @@ void filter(mvalue_ptr *val, int db_size)
 
             // search for the next ist value
             next_ist = j + 1;
-            while (val[i].vals[next_ist].ist == 0.0f && next_ist < val[i].cvals)
+            while (next_ist < val[i].cvals && val[i].vals[next_ist].ist == 0.0f)
                 next_ist++;
 
             if (next_ist >= val[i].cvals)

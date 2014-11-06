@@ -48,7 +48,6 @@ int main(int argc, char **argv)
     int rc = 0;
     int db_size = 0;
     mvalue_ptr *db_values = NULL;
-    member members[POPULATION_SIZE];
     bounds bconf;
 
     if (argc < 2)
@@ -82,9 +81,12 @@ int main(int argc, char **argv)
 
     filter(db_values, db_size);
 
-    evolution(db_values, db_size, bconf, members);
+    //evolution_serial(db_values, db_size, bconf, metric_abs);
+    //evolution_serial(db_values, db_size, bconf, metric_square);
 
-    print_array(members, POPULATION_SIZE);
+    evolution_pthread(db_values, db_size, bconf, metric_abs);
+
+    //print_array(members, POPULATION_SIZE);
 
     // exit and clean up
     free_array(db_values, db_size);

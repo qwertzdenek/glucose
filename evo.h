@@ -13,9 +13,12 @@ evo.h
 
 #define POPULATION_SIZE 30
 
-void evolution(mvalue_ptr *db_values, int db_size, bounds bconf, member members[]);
-#ifdef DEBUG
-void print_array(member a[], int s);
-#endif // DEBUG
+typedef float (*get_metric_func)(float left, float right);
+
+float metric_abs(float left, float right);
+float metric_square(float left, float right);
+
+void evolution_serial(mvalue_ptr *values, int size, bounds bconf, get_metric_func mfun);
+void evolution_pthread(mvalue_ptr *values, int size, bounds bconf, get_metric_func mfun);
 
 #endif // EVO_H_INCLUDED
