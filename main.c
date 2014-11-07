@@ -6,10 +6,10 @@ Copyright (c) 2014 Zdeněk Janeček
 main.c
 */
 
+#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <locale.h>
-#include <unistd.h>
 #include <math.h>
 
 #include "opencl_target.h"
@@ -85,6 +85,7 @@ int main(int argc, char **argv)
     //evolution_serial(db_values, db_size, bconf, metric_square);
 
     evolution_pthread(db_values, db_size, bconf, metric_abs);
+    evolution_pthread(db_values, db_size, bconf, metric_square);
 
     //print_array(members, POPULATION_SIZE);
 

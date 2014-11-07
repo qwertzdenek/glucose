@@ -14,7 +14,6 @@
 				<Option parameters="data.sqlite3" />
 				<Compiler>
 					<Add option="-g" />
-					<Add option="-DDEBUG" />
 				</Compiler>
 			</Target>
 			<Target title="Release">
@@ -33,10 +32,9 @@
 		</Build>
 		<Compiler>
 			<Add option="-Wall" />
-			<Add option="-std=c99" />
 		</Compiler>
 		<Linker>
-			<Add option="-lm -lsqlite3 -lpthread" />
+			<Add option="-lm -lsqlite3 -pthread" />
 		</Linker>
 		<Unit filename="approx.c">
 			<Option compilerVar="CC" />

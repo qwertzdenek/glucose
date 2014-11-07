@@ -6,7 +6,7 @@ Copyright (c) 2014 Zdeněk Janeček
 database.c
 */
 
-#define _XOPEN_SOURCE
+#define _XOPEN_SOURCE 600
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -6,12 +6,11 @@ Copyright (c) 2014 Zdeněk Janeček
 evo.c
 */
 
+#include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <unistd.h>
 #include <string.h>
 #include <float.h>
-#include <pthread.h>
 
 #define GENERATION_COUNT 1000
 
@@ -31,14 +30,11 @@ get_metric_func get_metric;
 member members[POPULATION_SIZE];
 member members_new[POPULATION_SIZE];
 
-#define TRUE 1
-#define FALSE 0
-#define T_WAIT -1
-
 #define T_COUNT 4
 pthread_t workers[T_COUNT];
-int tasks[T_COUNT];
-int running[T_COUNT];
+pthread_spinlock_t spin;
+pthread_barrier_t barrier;
+static volatile int worker_counter;
 
 void mult(member *a, float f, member *res)
 {
@@ -286,7 +282,7 @@ void evolution_serial(mvalue_ptr *values, int size, bounds bconf, get_metric_fun
     db_size = size;
     get_metric = mfun;
 
-    srand(getpid());
+    srand(pthread_self());
     init_population(members, bconf);
 
     // initialize new generation buffer
@@ -333,38 +329,43 @@ void evolution_serial(mvalue_ptr *values, int size, bounds bconf, get_metric_fun
 
 void *work_task(void *par)
 {
+    int i, j;
     int a, b, c;
     float new_fit;
     member op_vec;
-    int index = (int) par;
-    int act;
+    long index = (long) par;
 
-    while (running[index])
+    for (i = 0; i < GENERATION_COUNT; i++)
     {
-        // wait for new task
-        while (tasks[index] == T_WAIT)
-            ;
+        for (j = index; j < POPULATION_SIZE; j = j + T_COUNT)
+        {
+            a = (int) (((float) rand() / RAND_MAX) * (POPULATION_SIZE - 1));
+            b = (int) (((float) rand() / RAND_MAX) * (POPULATION_SIZE - 1));
+            c = (int) (((float) rand() / RAND_MAX) * (POPULATION_SIZE - 1));
 
-        act = tasks[index];
+            diff(members + a, members + b, &op_vec); // -> diff vector
+            mult(&op_vec, F, &op_vec);              // -> weighted diff vector
+            add(members + c, &op_vec, &op_vec);     // -> noise vector
 
-        printf("%d computing %d\n", index, act);
+            cross_m(&op_vec, members + j, &op_vec);
 
-        a = (int) (((float) rand() / RAND_MAX) * (POPULATION_SIZE - 1));
-        b = (int) (((float) rand() / RAND_MAX) * (POPULATION_SIZE - 1));
-        c = (int) (((float) rand() / RAND_MAX) * (POPULATION_SIZE - 1));
+            fitness(&op_vec);
+            new_fit = op_vec.fitness;
+            if (fabs(new_fit) < fabs(members[j].fitness))
+                memcpy(members_new + j, &op_vec, sizeof(member));
+        }
 
-        diff(members + a, members + b, &op_vec); // -> diff vector
-        mult(&op_vec, F, &op_vec);              // -> weighted diff vector
-        add(members + c, &op_vec, &op_vec);     // -> noise vector
+        pthread_spin_lock(&spin);
+        worker_counter++;
 
-        cross_m(&op_vec, members + act, &op_vec);
+        if (worker_counter >= T_COUNT)
+        {
+            memcpy((member *) members, (member *) members_new, sizeof(member) * POPULATION_SIZE);
+            worker_counter = 0;
+        }
+        pthread_spin_unlock(&spin);
 
-        fitness(&op_vec);
-        new_fit = op_vec.fitness;
-        if (fabs(new_fit) < fabs(members[act].fitness))
-            memcpy(members_new + act, &op_vec, sizeof(member));
-
-        tasks[index] = T_WAIT;
+        pthread_barrier_wait(&barrier);
     }
 
     pthread_exit(NULL);
@@ -372,70 +373,45 @@ void *work_task(void *par)
 
 void evolution_pthread(mvalue_ptr *values, int size, bounds bconf, get_metric_func mfun)
 {
-    int i, j, k;
+    int i;
+    long k;
     float min_fit;
     pthread_attr_t attr;
     member bm;
-    int jwait;
 
     db_values = values;
     db_size = size;
     get_metric = mfun;
 
-    memset(&bm, 0, sizeof(member));
-
-    /* create threads */
-    pthread_attr_init(&attr);
-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-
-    srand(getpid());
+    srand(pthread_self());
     init_population(members, bconf);
 
     // initialize new generation buffer
     memcpy((member *) members_new, (member *) members, sizeof(member) * POPULATION_SIZE);
 
+    /* create threads */
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+    worker_counter = 0;
+    pthread_spin_init(&spin, PTHREAD_PROCESS_PRIVATE);
+    pthread_barrier_init(&barrier, NULL, T_COUNT);
+
     for (k = 0; k < T_COUNT; k++)
     {
-        running[k] = TRUE;
-        tasks[k] = T_WAIT;
-        pthread_create(&workers[k], &attr, work_task, k);
-    }
-
-    for (i = 0; i < GENERATION_COUNT; i++)
-    {
-        for (j = 0; j < POPULATION_SIZE; j++)
-        {
-            jwait = TRUE;
-
-            // check threads
-            while (jwait)
-            {
-                for (k = 0; k < T_COUNT; k++)
-                {
-                    if (tasks[k] == T_WAIT)
-                    {
-                        printf("starting %d with %d\n", k, j);
-                        tasks[k] = j;
-                        jwait = FALSE;
-                        break;
-                    }
-                }
-            }
-        }
-
-        memcpy((member *) members, (member *) members_new, sizeof(member) * POPULATION_SIZE);
+        pthread_create(&workers[k], &attr, work_task, (void *) k);
     }
 
     for (k = 0; k < T_COUNT; k++)
     {
-        printf("stopping %d\n", k);
-        running[k] = FALSE;
-        tasks[k] = k;
         pthread_join(workers[k], NULL);
     }
 
     pthread_attr_destroy(&attr);
+    pthread_spin_destroy(&spin);
+    pthread_barrier_destroy(&barrier);
 
+    memset(&bm, 0, sizeof(member));
     min_fit = FLT_MAX;
     for (i = 0; i < POPULATION_SIZE; i++)
     {
