@@ -15,35 +15,45 @@ opencl_target.c
 #include <CL/cl.h>
 #endif
 
-int init_opencl() {
-    int i;
-    char* value;
+int init_opencl()
+{
+    int i, j;
+    char buf[100];
     size_t valueSize;
 
     // Get platform and device information
-    cl_platform_id platform_id = NULL;
-    cl_uint ret_num_platforms;
+    cl_platform_id *platforms;
+    cl_uint platformCount;
 
-    cl_device_id* devices;
+    cl_device_id *devices;
     cl_uint deviceCount;
 
-    clGetPlatformIDs(1, &platform_id, &ret_num_platforms);
+    clGetPlatformIDs(0, NULL, &platformCount);
+    platforms = (cl_platform_id *) malloc(sizeof(cl_platform_id) * platformCount);
+    clGetPlatformIDs(platformCount, platforms, NULL);
 
-    // get all devices
-    clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_ALL, 0, NULL, &deviceCount);
-    devices = (cl_device_id*) malloc(sizeof(cl_device_id) * deviceCount);
-    clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_ALL, deviceCount, devices, NULL);
+    printf("have %d platforms\n", platformCount);
 
-    for (i = 0; i < deviceCount; i++)
+    for (i = 0; i < platformCount; i++)
     {
-        clGetDeviceInfo(devices[i], CL_DEVICE_NAME, 0, NULL, &valueSize);
-        value = (char*) malloc(valueSize);
-        clGetDeviceInfo(devices[i], CL_DEVICE_NAME, valueSize, value, NULL);
-        printf("%d. Device: %s\n", i+1, value);
-        free(value);
+        // get all devices
+        clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, 0, NULL, &deviceCount);
+        devices = (cl_device_id*) malloc(sizeof(cl_device_id) * deviceCount);
+        clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, deviceCount, devices, NULL);
+
+        for (j = 0; j < deviceCount; j++)
+        {
+            clGetDeviceInfo(devices[j], CL_DEVICE_NAME, sizeof(buf), buf, &valueSize);
+            buf[valueSize - 1] = ' ';
+            clGetDeviceInfo(devices[j], CL_DEVICE_OPENCL_C_VERSION, sizeof(buf), (char *) buf + valueSize, NULL);
+
+            printf("platform=%d, device=%d: %s\n", i, j, buf);
+        }
+
+        free(devices);
     }
 
-    free(devices);
+    free(platforms);
 
     return 0;
 }

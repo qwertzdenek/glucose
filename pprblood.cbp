@@ -59,12 +59,8 @@
 		</Unit>
 		<Unit filename="opencl_target.c">
 			<Option compilerVar="CC" />
-			<Option compile="0" />
-			<Option link="0" />
 		</Unit>
-		<Unit filename="opencl_target.h">
-			<Option target="&lt;{~None~}&gt;" />
-		</Unit>
+		<Unit filename="opencl_target.h" />
 		<Unit filename="structures.h" />
 		<Unit filename="vadd.cl" />
 		<Extensions>

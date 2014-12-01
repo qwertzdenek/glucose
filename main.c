@@ -81,11 +81,13 @@ int main(int argc, char **argv)
 
     filter(db_values, db_size);
 
+    init_opencl();
+
     //evolution_serial(db_values, db_size, bconf, metric_abs);
     //evolution_serial(db_values, db_size, bconf, metric_square);
 
-    evolution_pthread(db_values, db_size, bconf, metric_abs);
-    evolution_pthread(db_values, db_size, bconf, metric_square);
+    //evolution_pthread(db_values, db_size, bconf, metric_abs);
+    //evolution_pthread(db_values, db_size, bconf, metric_square);
 
     //print_array(members, POPULATION_SIZE);
 
