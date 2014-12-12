@@ -7,21 +7,20 @@ evo.c
 */
 
 #include <pthread.h>
-#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <float.h>
-
-#define GENERATION_COUNT 1000
-
+#include <time.h>
+#include <stdint.h>
 #include <math.h>
 
 #include "evo.h"
+#include "mwc64x_rng.h"
+
+#define GENERATION_COUNT 1000
 
 const float F = 0.75; // mutation constant
 const float CR = 0.3; // threshold
-
-static inline float rfloat();
 
 // database
 mvalue_ptr *db_values;
@@ -96,30 +95,23 @@ float interp(float val, float a, float b)
     return (b - a) * val + a;
 }
 
-void cross_m(member *a, member *b, member *res)
+void cross_m(member *a, member *b, member *res, uint64_t *s, uint32_t range)
 {
     int i;
-    float rco;
     float *resptr = (float *) res;
     float *aptr = (float *) a;
     float *bptr = (float *) b;
+    uint32_t thresh = CR * range;
 
     for (i = 0; i < 11; i++)
     {
-        rco = (float) rand() / RAND_MAX;
-        *resptr = rco < CR ? *aptr : *bptr;
+        *resptr = MWC64X_Next(s, range) < thresh ? *aptr : *bptr;
         resptr++;
         aptr++;
         bptr++;
     }
 
-    res->fitness = 0.0f;
-}
-
-static inline float rfloat()
-{
-    float f = (float) rand() / RAND_MAX;
-    return f;
+    res->fitness = FLT_MAX;
 }
 
 float metric_abs(float left, float right)
@@ -132,23 +124,23 @@ float metric_square(float left, float right)
     return left*left - right*right;
 }
 
-void init_population(member members[], bounds bc)
+void init_population(member members[], bounds bc, uint64_t *s, uint32_t range)
 {
     int i;
 
     for (i = 0; i < POPULATION_SIZE; i++)
     {
-        members[i].p = interp(rfloat(), bc.pmax, bc.pmin);
-        members[i].cg = interp(rfloat(), bc.cgmax, bc.cgmin);
-        members[i].c = interp(rfloat(), bc.cmax, bc.cmin);
-        members[i].pp = interp(rfloat(), bc.ppmax, bc.ppmin);
-        members[i].cgp = interp(rfloat(), bc.cgpmax, bc.cgpmin);
-        members[i].cp = interp(rfloat(), bc.cpmax, bc.cpmin);
-        members[i].dt = interp(rfloat(), bc.dtmax, bc.dtmin);
-        members[i].h = interp(rfloat(), bc.hmax, bc.hmin);
-        members[i].k = interp(rfloat(), bc.kmax, bc.kmin);
-        members[i].m = interp(rfloat(), bc.mmax, bc.mmin);
-        members[i].n = interp(rfloat(), bc.nmax, bc.nmin);
+        members[i].p = interp((float) MWC64X_Next(s, range) / range, bc.pmax, bc.pmin);
+        members[i].cg = interp((float) MWC64X_Next(s, range) / range, bc.cgmax, bc.cgmin);
+        members[i].c = interp((float) MWC64X_Next(s, range) / range, bc.cmax, bc.cmin);
+        members[i].pp = interp((float) MWC64X_Next(s, range) / range, bc.ppmax, bc.ppmin);
+        members[i].cgp = interp((float) MWC64X_Next(s, range) / range, bc.cgpmax, bc.cgpmin);
+        members[i].cp = interp((float) MWC64X_Next(s, range) / range, bc.cpmax, bc.cpmin);
+        members[i].dt = interp((float) MWC64X_Next(s, range) / range, bc.dtmax, bc.dtmin);
+        members[i].h = interp((float) MWC64X_Next(s, range) / range, bc.hmax, bc.hmin);
+        members[i].k = interp((float) MWC64X_Next(s, range) / range, bc.kmax, bc.kmin);
+        members[i].m = interp((float) MWC64X_Next(s, range) / range, bc.mmax, bc.mmin);
+        members[i].n = interp((float) MWC64X_Next(s, range) / range, bc.nmax, bc.nmin);
         members[i].fitness = FLT_MAX;
     }
 }
@@ -282,27 +274,33 @@ void evolution_serial(mvalue_ptr *values, int size, bounds bconf, get_metric_fun
     db_size = size;
     get_metric = mfun;
 
-    srand(pthread_self());
-    init_population(members, bconf);
+    uint64_t state;
+    uint32_t range = 12*POPULATION_SIZE;
+
+    MWC64X_Seed(&state, range, time(NULL));
+    init_population(members, bconf, &state, range);
 
     // initialize new generation buffer
     memcpy((member *) members_new, (member *) members, sizeof(member) * POPULATION_SIZE);
 
     for (i = 0; i < GENERATION_COUNT; i++)
     {
+        range = 4*POPULATION_SIZE;
+        MWC64X_Seed(&state, range, time(NULL));
+
         for (j = 0; j < POPULATION_SIZE; j++)
         {
-            a = (int) (((float) rand() / RAND_MAX) * (POPULATION_SIZE - 1));
-            b = (int) (((float) rand() / RAND_MAX) * (POPULATION_SIZE - 1));
-            c = (int) (((float) rand() / RAND_MAX) * (POPULATION_SIZE - 1));
+            a = MWC64X_Next(&state, range) / 4;
+            b = MWC64X_Next(&state, range) / 4;
+            c = MWC64X_Next(&state, range) / 4;
 
             diff(members + a, members + b, &op_vec); // -> diff vector
             mult(&op_vec, F, &op_vec);              // -> weighted diff vector
             add(members + c, &op_vec, &op_vec);     // -> noise vector
 
-            cross_m(&op_vec, members + j, &op_vec);
+            cross_m(&op_vec, members + j, &op_vec, &state, range);
 
-            // fitness zkušebního vektoru a porovnan s cílovým
+            // fitness zkušebního vektoru a porovnám s cílovým
             fitness(&op_vec);
             new_fit = op_vec.fitness;
             if (fabs(new_fit) < fabs(members[j].fitness))
@@ -327,6 +325,7 @@ void evolution_serial(mvalue_ptr *values, int size, bounds bconf, get_metric_fun
            op_vec.dt, op_vec.h, op_vec.k, op_vec.m, op_vec.n, op_vec.fitness);
 }
 
+
 void *work_task(void *par)
 {
     int i, j;
@@ -335,19 +334,24 @@ void *work_task(void *par)
     member op_vec;
     long index = (long) par;
 
+    uint32_t range = 4*POPULATION_SIZE;
+    uint64_t state;
+
     for (i = 0; i < GENERATION_COUNT; i++)
     {
+        MWC64X_Seed(&state, range, 6803 * (i + 1));
+
         for (j = index; j < POPULATION_SIZE; j = j + T_COUNT)
         {
-            a = (int) (((float) rand() / RAND_MAX) * (POPULATION_SIZE - 1));
-            b = (int) (((float) rand() / RAND_MAX) * (POPULATION_SIZE - 1));
-            c = (int) (((float) rand() / RAND_MAX) * (POPULATION_SIZE - 1));
+            a = MWC64X_Next(&state, range) / 4;
+            b = MWC64X_Next(&state, range) / 4;
+            c = MWC64X_Next(&state, range) / 4;
 
             diff(members + a, members + b, &op_vec); // -> diff vector
             mult(&op_vec, F, &op_vec);              // -> weighted diff vector
             add(members + c, &op_vec, &op_vec);     // -> noise vector
 
-            cross_m(&op_vec, members + j, &op_vec);
+            cross_m(&op_vec, members + j, &op_vec, &state, range);
 
             fitness(&op_vec);
             new_fit = op_vec.fitness;
@@ -383,13 +387,16 @@ void evolution_pthread(mvalue_ptr *values, int size, bounds bconf, get_metric_fu
     db_size = size;
     get_metric = mfun;
 
-    srand(pthread_self());
-    init_population(members, bconf);
+    uint64_t state;
+    uint32_t range = 12*POPULATION_SIZE;
+
+    MWC64X_Seed(&state, range, time(NULL));
+    init_population(members, bconf, &state, range);
 
     // initialize new generation buffer
     memcpy((member *) members_new, (member *) members, sizeof(member) * POPULATION_SIZE);
 
-    /* create threads */
+    // create threads
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 

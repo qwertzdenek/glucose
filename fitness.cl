@@ -3,8 +3,10 @@ The MIT License (MIT)
 Copyright (c) 2014 Zdeněk Janeček
 
 ** Glucose project**
-OpenCL sample
+OpenCL evolution
 */
+
+#include "mwc64x_rng"
 
 __kernel void vector_add_gpu (__global const float* src_a,
                      __global const float* src_b,
@@ -16,4 +18,3 @@ __kernel void vector_add_gpu (__global const float* src_a,
    if (idx < num)
       res[idx] = src_a[idx] + src_b[idx];
 }
-

@@ -57,12 +57,16 @@
 		<Unit filename="main.c">
 			<Option compilerVar="CC" />
 		</Unit>
+		<Unit filename="mwc64x_rng.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="mwc64x_rng.cl" />
+		<Unit filename="mwc64x_rng.h" />
 		<Unit filename="opencl_target.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="opencl_target.h" />
 		<Unit filename="structures.h" />
-		<Unit filename="vadd.cl" />
 		<Extensions>
 			<code_completion />
 			<envvars />
