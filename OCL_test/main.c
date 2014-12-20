@@ -1,17 +1,7 @@
-/*
-The MIT License (MIT)
-Copyright (c) 2014 Zdeněk Janeček
-
-** Glucose project**
-opencl_target.c
-*/
-
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include <string.h>
-#include <math.h>
-
-#include "opencl_target.h"
 
 #ifdef __APPLE__
 #include <OpenCL/opencl.h>
@@ -19,21 +9,9 @@ opencl_target.c
 #include <CL/cl.h>
 #endif
 
-cl_platform_id *platforms;
-cl_device_id *devices;
-cl_context context;
-cl_command_queue command_queue;
-cl_program program;
-cl_kernel kernel;
+#include "mwc64x_rng.h"
 
-cl_mem buf_seg_vals; // H->GPU
-cl_mem buf_seg_vals_res; // GPU
-cl_mem buf_lenghts; // H->GPU
-cl_mem buf_members; // H->GPU on cl_compute_fitness
-cl_mem buf_res; // GPU->H
-
-size_t two_dim[2] = {0, 0};
-size_t one_dim[1] = {0};
+#define DATA_D 16
 
 static char* read_source_file(const char *filename)
 {
@@ -85,38 +63,52 @@ static char* read_source_file(const char *filename)
     return src;
 }
 
-int init_opencl(int num_values, mvalue_ptr *values, int metric_type)
+int main()
 {
     int i, j;
     size_t valueSize;
     char buf[8];
     char *strings;
     const int strings_len = 128;
+
     const char *source = NULL;
 
     cl_int err;
 
+    cl_platform_id *platforms;
     cl_uint platformCount;
+
+    cl_device_id *devices;
     cl_uint deviceCount;
+
+    cl_context context;
     cl_context_properties properties[3];
 
-    int max = 0;
+    cl_command_queue command_queue;
+    cl_program program;
+    cl_kernel kernel;
+    cl_mem input, output;
+    size_t global[2]={DATA_D, DATA_D};
 
-    // load values to dynamic memory
-    for (i = 0; i < num_values; i++)
-        max = fmaxl(max, values[i].cvals);
+    int *inputData = NULL;
+    float *outputData = NULL;
+    float res[DATA_D];
+    uint64_t state;
 
-    mvalue *seg_vals = (mvalue *) malloc(sizeof(mvalue) * max * num_values);
-    memset(seg_vals, 0, sizeof(mvalue) * max * num_values); // initialize
+    float avg = 0.0f;
 
-    for (i = 0; i < num_values; i++)
-        memcpy(seg_vals + i * max, values[i].vals, sizeof(mvalue) * values[i].cvals);
+    inputData = (int *) malloc(DATA_D * DATA_D * sizeof(int));
+    outputData = (float *) malloc(DATA_D * DATA_D * sizeof(float));
 
-    // create lenghts array
-    int *seg_lenghts = (int *) malloc(sizeof(int) * num_values);
-    memset(seg_lenghts, 0, sizeof(int) * num_values); // initialize
+    // generate data
+    MWC64X_Seed(&state, DATA_D * DATA_D, time(NULL));
+    for (i = 0; i < DATA_D * DATA_D; i++)
+    {
+        inputData[i] = (int) MWC64X_Next(&state, DATA_D * DATA_D);
+        outputData[i] = 0.0f;
+    }
 
-    source = read_source_file("fitness.cl");
+    source = read_source_file("sine_vec.cl");
 
     // Probe platforms
     clGetPlatformIDs(0, NULL, &platformCount);
@@ -145,7 +137,7 @@ int init_opencl(int num_values, mvalue_ptr *values, int metric_type)
 
         free(devices);
     }
-
+    
     free(strings);
 
     // ASK user
@@ -203,14 +195,6 @@ int init_opencl(int num_values, mvalue_ptr *values, int metric_type)
     // specify which kernel from the program to execute
     kernel = clCreateKernel(program, "sine_gpu", &err);
 
-    free((void *) source);
-
-    return 0;
-}
-
-void cl_compute_fitness(int num_members, member *members)
-{
-/*
     // create buffers for the input and ouput
     input = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(int) * DATA_D * DATA_D, NULL, NULL);
     output = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * DATA_D * DATA_D, NULL, NULL);
@@ -223,25 +207,35 @@ void cl_compute_fitness(int num_members, member *members)
 
     clEnqueueNDRangeKernel(command_queue, kernel, 2, NULL, global, NULL, 0, NULL, NULL);
     clFinish(command_queue);
-
+    
     clEnqueueReadBuffer(command_queue, output, CL_TRUE, 0, sizeof(float) * DATA_D * DATA_D, outputData, 0, NULL, NULL);
-    */
-}
 
-void cl_cleanup()
-{
-    // clean CL objects
-    clReleaseMemObject(buf_seg_vals);
-    clReleaseMemObject(buf_seg_vals_res);
-    clReleaseMemObject(buf_lenghts);
-    clReleaseMemObject(buf_members);
-    clReleaseMemObject(buf_res);
+    for (i = 0; i < DATA_D; i++)
+    {
+        avg = 0.0f;
+        for (j = 0; j < DATA_D; j++)
+        {
+            avg += outputData[i * DATA_D + j];
+        }
+        res[i] = avg / DATA_D;
+    }
+
+    for (i = 0; i < DATA_D; i++)
+    {
+        printf(" %f\n", res[i]);
+    }
+
+    clReleaseMemObject(input);
+    clReleaseMemObject(output);
     clReleaseProgram(program);
     clReleaseKernel(kernel);
     clReleaseCommandQueue(command_queue);
     clReleaseContext(context);
-
-    // clean host memory
     free(devices);
     free(platforms);
+    free((void *) source);
+    free(inputData);
+    free(outputData);
+
+    return 0;
 }

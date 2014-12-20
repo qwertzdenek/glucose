@@ -6,7 +6,6 @@ Copyright (c) 2014 Zdeněk Janeček
 approx.c
 */
 
-#include <stdio.h>
 #include <math.h>
 #include <string.h>
 
@@ -49,11 +48,6 @@ void approx_blood(mvalue *vals, int len)
 
         vals[i].blood = (tc - ta) / (tb - ta) * (b - a) + a;
 
-        if (isnan(vals[i].blood))
-        {
-            printf("cože?");
-        }
-
         i++;
     }
 }
@@ -94,11 +88,6 @@ void approx_ist(mvalue *vals, int len)
         tc = vals[i].time;
 
         vals[i].ist = (tc - ta) / (tb - ta) * (b - a) + a;
-
-        if (isnan(vals[i].ist))
-        {
-            printf("cože?");
-        }
 
         i++;
     }

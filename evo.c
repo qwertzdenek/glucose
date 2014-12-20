@@ -14,10 +14,15 @@ evo.c
 #include <stdint.h>
 #include <math.h>
 
+//#include "opencl_target.h"
 #include "evo.h"
 #include "mwc64x_rng.h"
+#include "opencl_target.h"
 
 #define GENERATION_COUNT 1000
+
+typedef float (*get_metric_func)(float left, float right);
+typedef float (*get_evaluation_func)(float new_val, float old_val, int count);
 
 const float F = 0.75; // mutation constant
 const float CR = 0.3; // threshold
@@ -26,6 +31,7 @@ const float CR = 0.3; // threshold
 mvalue_ptr *db_values;
 int db_size;
 get_metric_func get_metric;
+get_evaluation_func get_eval;
 member members[POPULATION_SIZE];
 member members_new[POPULATION_SIZE];
 
@@ -124,6 +130,16 @@ float metric_square(float left, float right)
     return left*left - right*right;
 }
 
+float evaluation_avg(float new_val, float old_val, int i)
+{
+    return old_val * i / (i + 1) + new_val / (i + 1);
+}
+
+float evaluation_max(float new_val, float old_val, int o)
+{
+    return new_val > old_val ? new_val : old_val;
+}
+
 void init_population(member members[], bounds bc, uint64_t *s, uint32_t range)
 {
     int i;
@@ -149,8 +165,7 @@ void fitness(member *m)
 {
     int i, j;
     float segment_sum;
-    float avg_fit;
-    float new_fit;
+    float act_fit;
     float phi, psi, I, theta, left, right;
     float itmh, ipm, ipdt;
     mvalue act;
@@ -162,7 +177,7 @@ void fitness(member *m)
 
     int tmpj; // tmp values for value searching
 
-    avg_fit = 0;
+    act_fit = 0;
     for (i = 0; i < db_size; i++)
     {
         segment_sum = 0;
@@ -199,7 +214,7 @@ void fitness(member *m)
             I = m->p * act.blood + m->cg * psi + m->c;
             theta = phi * (m->pp * act.blood + m->cgp * psi + m->cp);
 
-            left = I + theta; // !!!
+            left = I + theta;
 
             // ** RIGHT
             ta = db_values[i].vals[j].time;
@@ -255,14 +270,13 @@ void fitness(member *m)
             segment_sum += get_metric(left, right);
         }
 
-        new_fit = segment_sum / db_values[i].cvals;
-        avg_fit = avg_fit * i / (i + 1) + new_fit / (i + 1);
+        act_fit = get_eval(segment_sum / db_values[i].cvals, act_fit, i);
     }
 
-    m->fitness = avg_fit;
+    m->fitness = act_fit;
 }
 
-void evolution_serial(mvalue_ptr *values, int size, bounds bconf, get_metric_func mfun)
+void evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metric_type)
 {
     int i, j;
     int a, b, c;
@@ -271,8 +285,25 @@ void evolution_serial(mvalue_ptr *values, int size, bounds bconf, get_metric_fun
     float min_fit;
 
     db_values = values;
-    db_size = size;
-    get_metric = mfun;
+    db_size = num_values;
+
+    switch (metric_type)
+    {
+    case METRIC_ABS:
+        get_metric = metric_abs;
+        get_eval = evaluation_avg;
+        break;
+    case METRIC_SQ:
+        get_metric = metric_square;
+        get_eval = evaluation_avg;
+        break;
+    case METRIC_MAX:
+        get_metric = metric_abs;
+        get_eval = evaluation_max;
+        break;
+    default:
+        return;
+    }
 
     uint64_t state;
     uint32_t range = 12*POPULATION_SIZE;
@@ -325,7 +356,6 @@ void evolution_serial(mvalue_ptr *values, int size, bounds bconf, get_metric_fun
            op_vec.dt, op_vec.h, op_vec.k, op_vec.m, op_vec.n, op_vec.fitness);
 }
 
-
 void *work_task(void *par)
 {
     int i, j;
@@ -375,7 +405,7 @@ void *work_task(void *par)
     pthread_exit(NULL);
 }
 
-void evolution_pthread(mvalue_ptr *values, int size, bounds bconf, get_metric_func mfun)
+void evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metric_type)
 {
     int i;
     long k;
@@ -384,8 +414,25 @@ void evolution_pthread(mvalue_ptr *values, int size, bounds bconf, get_metric_fu
     member bm;
 
     db_values = values;
-    db_size = size;
-    get_metric = mfun;
+    db_size = num_values;
+
+    switch (metric_type)
+    {
+    case METRIC_ABS:
+        get_metric = metric_abs;
+        get_eval = evaluation_avg;
+        break;
+    case METRIC_SQ:
+        get_metric = metric_square;
+        get_eval = evaluation_avg;
+        break;
+    case METRIC_MAX:
+        get_metric = metric_abs;
+        get_eval = evaluation_max;
+        break;
+    default:
+        return;
+    }
 
     uint64_t state;
     uint32_t range = 12*POPULATION_SIZE;
@@ -432,4 +479,65 @@ void evolution_pthread(mvalue_ptr *values, int size, bounds bconf, get_metric_fu
     printf("best [%f %f %f %f %f %f %f %f %f %f %f %f]\n",
            bm.p, bm.cg, bm.c, bm.pp, bm.cgp, bm.cp,
            bm.dt, bm.h, bm.k, bm.m, bm.n, bm.fitness);
+}
+
+void evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metric_type)
+{
+    int i, j;
+    int a, b, c;
+    member op_vec;
+    float min_fit;
+
+    uint64_t state;
+    uint32_t range = 12*POPULATION_SIZE;
+
+    init_opencl(num_values, values, metric_type);
+
+    MWC64X_Seed(&state, range, time(NULL));
+    init_population(members, bconf, &state, range);
+
+    for (i = 0; i < GENERATION_COUNT; i++)
+    {
+        range = 4*POPULATION_SIZE;
+        MWC64X_Seed(&state, range, time(NULL));
+
+        // nageneruje nové kandidáty populace
+        for (j = 0; j < POPULATION_SIZE; j++)
+        {
+            a = MWC64X_Next(&state, range) / 4;
+            b = MWC64X_Next(&state, range) / 4;
+            c = MWC64X_Next(&state, range) / 4;
+
+            diff(members + a, members + b, &op_vec); // -> diff vector
+            mult(&op_vec, F, &op_vec);              // -> weighted diff vector
+            add(members + c, &op_vec, &op_vec);     // -> noise vector
+
+            cross_m(&op_vec, members + j, &op_vec, &state, range);
+
+            memcpy(members_new + j, &op_vec, sizeof(member));
+        }
+        // spočítej přes opencl fitness pro každého člena v members_new
+        cl_compute_fitness(POPULATION_SIZE, members_new);
+
+        // nahraď v members lepší členy z members_new
+        for (j = 0; j < POPULATION_SIZE; j++)
+        {
+            if (members[j].fitness > members_new[j].fitness)
+                members[j] = members_new[j];
+        }
+    }
+
+    min_fit = FLT_MAX;
+    for (i = 0; i < POPULATION_SIZE; i++)
+    {
+        if (fabs(members[i].fitness) < fabs(min_fit))
+        {
+            min_fit = members[i].fitness;
+            op_vec = members[i];
+        }
+    }
+
+    printf("best [%f %f %f %f %f %f %f %f %f %f %f %f]\n",
+           op_vec.p, op_vec.cg, op_vec.c, op_vec.pp, op_vec.cgp, op_vec.cp,
+           op_vec.dt, op_vec.h, op_vec.k, op_vec.m, op_vec.n, op_vec.fitness);
 }

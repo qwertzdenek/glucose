@@ -9,6 +9,9 @@ opencl_target.h
 #ifndef OPENCL_TARGET_H_INCLUDED
 #define OPENCL_TARGET_H_INCLUDED
 
-int init_opencl();
+#include "structures.h"
+
+int init_opencl(int num_values, mvalue_ptr *values, int metric_type);
+void cl_compute_fitness(int num_members, member *members);
 
 #endif // OPENCL_TARGET_H_INCLUDED

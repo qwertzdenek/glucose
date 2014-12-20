@@ -50,6 +50,7 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="evo.h" />
+		<Unit filename="fitness.cl" />
 		<Unit filename="load_ini.c">
 			<Option compilerVar="CC" />
 		</Unit>

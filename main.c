@@ -12,7 +12,6 @@ main.c
 #include <locale.h>
 #include <math.h>
 
-#include "opencl_target.h"
 #include "database.h"
 #include "approx.h"
 #include "load_ini.h"
@@ -81,13 +80,12 @@ int main(int argc, char **argv)
 
     filter(db_values, db_size);
 
-//    init_opencl();
+    evolution_serial(db_size, db_values, bconf, METRIC_ABS);
+    //evolution_serial(db_size, db_values, bconf, METRIC_SQ);
+    //evolution_serial(db_size, db_values, bconf, METRIC_MAX);
 
-    //evolution_serial(db_values, db_size, bconf, metric_abs);
-    //evolution_serial(db_values, db_size, bconf, metric_square);
-
-    evolution_pthread(db_values, db_size, bconf, metric_abs);
-    //evolution_pthread(db_values, db_size, bconf, metric_square);
+    //evolution_pthread(db_size, db_values, bconf, METRIC_ABS);
+    //evolution_pthread(db_size, db_values, bconf, METRIC_SQ);
 
     //print_array(members, POPULATION_SIZE);
 
