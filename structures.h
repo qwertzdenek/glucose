@@ -9,6 +9,12 @@ structures.h
 #ifndef STRUCTURES_H_INCLUDED
 #define STRUCTURES_H_INCLUDED
 
+#define POPULATION_SIZE 30
+
+#define METRIC_ABS 10
+#define METRIC_SQ 11
+#define METRIC_MAX 12
+
 typedef struct
 {
     float blood;

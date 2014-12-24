@@ -270,7 +270,7 @@ void fitness(member *m)
             segment_sum += get_metric(left, right);
         }
 
-        act_fit = get_eval(segment_sum / db_values[i].cvals, act_fit, i);
+        act_fit = get_eval(segment_sum / (db_values[i].cvals - 4), act_fit, i);
     }
 
     m->fitness = act_fit;
@@ -491,6 +491,9 @@ void evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metr
     uint64_t state;
     uint32_t range = 12*POPULATION_SIZE;
 
+    MWC64X_Seed(&state, range, time(NULL));
+    init_population(members, bconf, &state, range);
+
     init_opencl(num_values, values, metric_type);
 
     MWC64X_Seed(&state, range, time(NULL));
@@ -522,10 +525,12 @@ void evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metr
         // nahraď v members lepší členy z members_new
         for (j = 0; j < POPULATION_SIZE; j++)
         {
-            if (members[j].fitness > members_new[j].fitness)
+            if (members_new[j].fitness < members[j].fitness)
                 members[j] = members_new[j];
         }
     }
+
+    cl_cleanup();
 
     min_fit = FLT_MAX;
     for (i = 0; i < POPULATION_SIZE; i++)

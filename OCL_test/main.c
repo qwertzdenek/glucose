@@ -66,10 +66,9 @@ static char* read_source_file(const char *filename)
 int main()
 {
     int i, j;
-    size_t valueSize;
-    char buf[8];
-    char *strings;
-    const int strings_len = 128;
+    char string_one[128];
+    char string_two[128];
+    char string[256];
 
     const char *source = NULL;
 
@@ -115,8 +114,6 @@ int main()
     platforms = (cl_platform_id *) malloc(sizeof(cl_platform_id) * platformCount);
     clGetPlatformIDs(platformCount, platforms, NULL);
 
-    strings = (char *) malloc(strings_len);
-
     for (i = 0; i < platformCount; i++)
     {
         printf("platform %d\n", i);
@@ -128,25 +125,24 @@ int main()
 
         for (j = 0; j < deviceCount; j++)
         {
-            clGetDeviceInfo(devices[j], CL_DEVICE_NAME, strings_len, strings, &valueSize);
-            strcpy(strings + valueSize - 1, " - ");
-            clGetDeviceInfo(devices[j], CL_DEVICE_OPENCL_C_VERSION, strings_len, (char *) strings + valueSize + 2, NULL);
+            clGetDeviceInfo(devices[j], CL_DEVICE_NAME, 128, string_one, NULL);
+            clGetDeviceInfo(devices[j], CL_DEVICE_OPENCL_C_VERSION, 128, string_two, NULL);
 
-            printf("  device %d: %s\n", j, strings);
+            sprintf(string, "%s (version %s)", string_one, string_two);
+
+            printf("  device %d: %s\n", j, string);
         }
 
         free(devices);
     }
-    
-    free(strings);
 
     // ASK user
-
     do
     {
-        puts("platform number: ");
-        fgets((char *) buf, 7, stdin);
-        i = strtol(buf, NULL, 10);
+ //       puts("platform number: ");
+ //      fgets((char *) string, 7, stdin);
+ //       i = strtol(string, NULL, 10);
+ i = 0;
     } while (i >= platformCount);
 
     // get all devices
@@ -156,9 +152,10 @@ int main()
 
     do
     {
-        puts("device number: ");
-        fgets((char *) buf, 7, stdin);
-        j = strtol(buf, NULL, 10);
+   //     puts("device number: ");
+   //     fgets((char *) string, 7, stdin);
+   //     j = strtol(string, NULL, 10);
+        j=0;
     } while (j >= deviceCount);
 
     // context properties list - must be terminated with 0
@@ -196,10 +193,10 @@ int main()
     kernel = clCreateKernel(program, "sine_gpu", &err);
 
     // create buffers for the input and ouput
-    input = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(int) * DATA_D * DATA_D, NULL, NULL);
+    input = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(int) * DATA_D * DATA_D, inputData, NULL);
     output = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * DATA_D * DATA_D, NULL, NULL);
 
-    clEnqueueWriteBuffer(command_queue, input, CL_TRUE, 0, sizeof(int) * DATA_D * DATA_D, inputData, 0, NULL, NULL);
+//    clEnqueueWriteBuffer(command_queue, input, CL_TRUE, 0, sizeof(int) * DATA_D * DATA_D, inputData, 0, NULL, NULL);
 
     // set the argument list for the kernel command
     clSetKernelArg(kernel, 0, sizeof(cl_mem), &input);

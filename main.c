@@ -42,6 +42,14 @@ void print_array(member a[], int s)
     printf("\n");
 }
 
+void swap(mvalue_ptr *array, int i, int j)
+{
+    mvalue_ptr tmp;
+    tmp = array[i];
+    array[i] = array[j];
+    array[j] = tmp;
+}
+
 int main(int argc, char **argv)
 {
     int rc = 0;
@@ -80,12 +88,14 @@ int main(int argc, char **argv)
 
     filter(db_values, db_size);
 
-    evolution_serial(db_size, db_values, bconf, METRIC_ABS);
+    //evolution_serial(db_size, db_values, bconf, METRIC_ABS);
     //evolution_serial(db_size, db_values, bconf, METRIC_SQ);
     //evolution_serial(db_size, db_values, bconf, METRIC_MAX);
 
     //evolution_pthread(db_size, db_values, bconf, METRIC_ABS);
     //evolution_pthread(db_size, db_values, bconf, METRIC_SQ);
+
+    evolution_opencl(db_size, db_values, bconf, METRIC_ABS);
 
     //print_array(members, POPULATION_SIZE);
 

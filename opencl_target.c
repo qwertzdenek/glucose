@@ -10,6 +10,7 @@ opencl_target.c
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <float.h>
 
 #include "opencl_target.h"
 
@@ -24,22 +25,24 @@ cl_device_id *devices;
 cl_context context;
 cl_command_queue command_queue;
 cl_program program;
-cl_kernel kernel;
+cl_kernel kernel_equation;
+cl_kernel kernel_avg;
 
 cl_mem buf_seg_vals; // H->GPU
 cl_mem buf_seg_vals_res; // GPU
 cl_mem buf_lenghts; // H->GPU
-cl_mem buf_members; // H->GPU on cl_compute_fitness
 cl_mem buf_res; // GPU->H
 
 size_t two_dim[2] = {0, 0};
 size_t one_dim[1] = {0};
 
+int act_metric;
+
 static char* read_source_file(const char *filename)
 {
     long int
-        size = 0,
-        res  = 0;
+    size = 0,
+    res  = 0;
 
     char *src = NULL;
 
@@ -88,11 +91,13 @@ static char* read_source_file(const char *filename)
 int init_opencl(int num_values, mvalue_ptr *values, int metric_type)
 {
     int i, j;
-    size_t valueSize;
-    char buf[8];
-    char *strings;
-    const int strings_len = 128;
+    char string_one[128];
+    char string_two[128];
+    char string[256];
+
     const char *source = NULL;
+
+    act_metric = metric_type;
 
     cl_int err;
 
@@ -113,8 +118,11 @@ int init_opencl(int num_values, mvalue_ptr *values, int metric_type)
         memcpy(seg_vals + i * max, values[i].vals, sizeof(mvalue) * values[i].cvals);
 
     // create lenghts array
-    int *seg_lenghts = (int *) malloc(sizeof(int) * num_values);
-    memset(seg_lenghts, 0, sizeof(int) * num_values); // initialize
+    int *lenghts = (int *) malloc(sizeof(int) * num_values);
+    memset(lenghts, 0, sizeof(int) * num_values); // initialize
+
+    for (i = 0; i < num_values; i++)
+        lenghts[i] = values[i].cvals;
 
     source = read_source_file("fitness.cl");
 
@@ -122,8 +130,6 @@ int init_opencl(int num_values, mvalue_ptr *values, int metric_type)
     clGetPlatformIDs(0, NULL, &platformCount);
     platforms = (cl_platform_id *) malloc(sizeof(cl_platform_id) * platformCount);
     clGetPlatformIDs(platformCount, platforms, NULL);
-
-    strings = (char *) malloc(strings_len);
 
     for (i = 0; i < platformCount; i++)
     {
@@ -136,26 +142,26 @@ int init_opencl(int num_values, mvalue_ptr *values, int metric_type)
 
         for (j = 0; j < deviceCount; j++)
         {
-            clGetDeviceInfo(devices[j], CL_DEVICE_NAME, strings_len, strings, &valueSize);
-            strcpy(strings + valueSize - 1, " - ");
-            clGetDeviceInfo(devices[j], CL_DEVICE_OPENCL_C_VERSION, strings_len, (char *) strings + valueSize + 2, NULL);
+            clGetDeviceInfo(devices[j], CL_DEVICE_NAME, 128, string_one, NULL);
+            clGetDeviceInfo(devices[j], CL_DEVICE_OPENCL_C_VERSION, 128, string_two, NULL);
 
-            printf("  device %d: %s\n", j, strings);
+            sprintf(string, "%s (version %s)", string_one, string_two);
+
+            printf("  device %d: %s\n", j, string);
         }
 
         free(devices);
     }
 
-    free(strings);
-
     // ASK user
-
     do
     {
-        puts("platform number: ");
-        fgets((char *) buf, 7, stdin);
-        i = strtol(buf, NULL, 10);
-    } while (i >= platformCount);
+//        puts("platform number: ");
+//        fgets((char *) string, 7, stdin);
+//        i = strtol(string, NULL, 10);
+        i = 0;
+    }
+    while (i >= platformCount);
 
     // get all devices
     clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, 0, NULL, &deviceCount);
@@ -164,10 +170,12 @@ int init_opencl(int num_values, mvalue_ptr *values, int metric_type)
 
     do
     {
-        puts("device number: ");
-        fgets((char *) buf, 7, stdin);
-        j = strtol(buf, NULL, 10);
-    } while (j >= deviceCount);
+//        puts("device number: ");
+//        fgets((char *) string, 7, stdin);
+//        j = strtol(string, NULL, 10);
+        j = 0;
+    }
+    while (j >= deviceCount);
 
     // context properties list - must be terminated with 0
     properties[0]= CL_CONTEXT_PLATFORM; // specifies the platform to use
@@ -201,31 +209,100 @@ int init_opencl(int num_values, mvalue_ptr *values, int metric_type)
     }
 
     // specify which kernel from the program to execute
-    kernel = clCreateKernel(program, "sine_gpu", &err);
+    kernel_equation = clCreateKernel(program, "solve_equation", &err);
+    kernel_avg = clCreateKernel(program, "solve_avg", &err);
 
     free((void *) source);
+
+    buf_seg_vals = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(mvalue) * max * num_values, seg_vals, NULL);
+    buf_lenghts = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(int) * num_values, lenghts, NULL);
+    buf_seg_vals_res = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(mvalue) * max * num_values, NULL, NULL);
+    buf_res = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * num_values, NULL, NULL);
+
+    free(seg_vals);
+    free(lenghts);
+
+    // set the argument list for the kernel command
+    clSetKernelArg(kernel_equation, 0, sizeof(int), &num_values);
+    clSetKernelArg(kernel_equation, 1, sizeof(cl_mem), &buf_seg_vals);
+    clSetKernelArg(kernel_equation, 2, sizeof(cl_mem), &buf_lenghts);
+    clSetKernelArg(kernel_equation, 4, sizeof(cl_mem), &buf_seg_vals_res);
+    clSetKernelArg(kernel_equation, 5, sizeof(char), &act_metric);
+
+    clSetKernelArg(kernel_avg, 0, sizeof(int), &max);
+    clSetKernelArg(kernel_avg, 1, sizeof(cl_mem), &buf_seg_vals_res);
+    clSetKernelArg(kernel_avg, 2, sizeof(cl_mem), &buf_lenghts);
+    clSetKernelArg(kernel_avg, 3, sizeof(cl_mem), &buf_res);
+
+    one_dim[0] = num_values;
+    two_dim[0] = max;
+    two_dim[1] = max;
 
     return 0;
 }
 
+float avg(int num_array, float *array)
+{
+    float average = 0;
+    int i;
+    for (i = 0; i < num_array; i++)
+    {
+        average += array[i];
+    }
+    return average / num_array;
+}
+
+float max(int num_array, float *array)
+{
+    float maximum = FLT_MIN;
+    int i;
+    for (i = 0; i < num_array; i++)
+    {
+        maximum = fmaxf(maximum, array[i]);
+    }
+    return maximum;
+}
+
 void cl_compute_fitness(int num_members, member *members)
 {
-/*
-    // create buffers for the input and ouput
-    input = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(int) * DATA_D * DATA_D, NULL, NULL);
-    output = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * DATA_D * DATA_D, NULL, NULL);
+    int i;
+    int num_values = one_dim[0];
+    float *res = (float *) malloc(sizeof(float) * num_values);
+    float (*eval)(int, float *);
 
-    clEnqueueWriteBuffer(command_queue, input, CL_TRUE, 0, sizeof(int) * DATA_D * DATA_D, inputData, 0, NULL, NULL);
+    switch (act_metric)
+    {
+    case METRIC_ABS:
+    case METRIC_SQ:
+        eval = avg;
+        break;
+    case METRIC_MAX:
+        eval = max;
+        break;
+    default:
+        return;
+    }
 
-    // set the argument list for the kernel command
-    clSetKernelArg(kernel, 0, sizeof(cl_mem), &input);
-    clSetKernelArg(kernel, 1, sizeof(cl_mem), &output);
+    for (i = 0; i < num_members; i++)
+    {
+        clSetKernelArg(kernel_equation, 3, sizeof(member), &members[i]);
+        clEnqueueNDRangeKernel(command_queue, kernel_equation, 2, NULL, two_dim, NULL, 0, NULL, NULL);
+        clEnqueueNDRangeKernel(command_queue, kernel_avg, 1, NULL, one_dim, NULL, 0, NULL, NULL);
+        clFinish(command_queue);
+        clEnqueueReadBuffer(command_queue, buf_res, CL_TRUE, 0, sizeof(float) * num_values, res, 0, NULL, NULL);
 
-    clEnqueueNDRangeKernel(command_queue, kernel, 2, NULL, global, NULL, 0, NULL, NULL);
-    clFinish(command_queue);
+        members[i].fitness = eval(num_values, res);
+    }
 
-    clEnqueueReadBuffer(command_queue, output, CL_TRUE, 0, sizeof(float) * DATA_D * DATA_D, outputData, 0, NULL, NULL);
-    */
+    free(res);
+
+    // write members
+//    clEnqueueWriteBuffer(command_queue, input, CL_TRUE, 0, sizeof(int) * DATA_D * DATA_D, inputData, 0, NULL, NULL);
+    // set kernel argument
+//    clEnqueueNDRangeKernel(command_queue, kernel, 2, NULL, global, NULL, 0, NULL, NULL);
+//    clFinish(command_queue);
+
+//    clEnqueueReadBuffer(command_queue, output, CL_TRUE, 0, sizeof(float) * DATA_D * DATA_D, outputData, 0, NULL, NULL);
 }
 
 void cl_cleanup()
@@ -234,10 +311,10 @@ void cl_cleanup()
     clReleaseMemObject(buf_seg_vals);
     clReleaseMemObject(buf_seg_vals_res);
     clReleaseMemObject(buf_lenghts);
-    clReleaseMemObject(buf_members);
     clReleaseMemObject(buf_res);
     clReleaseProgram(program);
-    clReleaseKernel(kernel);
+    clReleaseKernel(kernel_equation);
+    clReleaseKernel(kernel_avg);
     clReleaseCommandQueue(command_queue);
     clReleaseContext(context);
 
