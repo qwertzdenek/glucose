@@ -122,7 +122,7 @@ void cross_m(member *a, member *b, member *res, uint64_t *s, uint32_t range)
 
 float metric_abs(float left, float right)
 {
-    return fabs(left) - fabs(right);
+    return fabsf(left) - fabsf(right);
 }
 
 float metric_square(float left, float right)
@@ -138,6 +138,11 @@ float evaluation_avg(float new_val, float old_val, int i)
 float evaluation_max(float new_val, float old_val, int o)
 {
     return new_val > old_val ? new_val : old_val;
+}
+
+inline int test_edge(float time, float low, float high)
+{
+    return time < low || time > high;
 }
 
 void init_population(member members[], bounds bc, uint64_t *s, uint32_t range)
@@ -169,6 +174,7 @@ void fitness(member *m)
     float phi, psi, I, theta, left, right;
     float itmh, ipm, ipdt;
     mvalue act;
+    mvalue_ptr el;
 
     float a, b; // ist vals
     float ta, tb, tc; // interpolated times
@@ -178,34 +184,41 @@ void fitness(member *m)
     int tmpj; // tmp values for value searching
 
     act_fit = 0;
-    for (i = 0; i < db_size; i++)
+    for (i = 0; i < db_size; i++) // iterate segments
     {
         segment_sum = 0;
+        el = db_values[i];
 
-        //printf("i=%d len=%d\n", i, db_values[i].cvals);
+        //printf("i=%d len=%d\n", i, el.cvals);
 
-        if (db_values[i].cvals < 3)
+        if (el.cvals < 5)
             continue;
 
-        for (j = 2; j < db_values[i].cvals - 2; j++)
+        for (j = 2; j < el.cvals - 2; j++) // iterate time
         {
+            act = el.vals[j];
+
             // phi
-            ta = db_values[i].vals[j-1].time;
-            tc = db_values[i].vals[j].time - m->h; // i(t - h)
+            ta = el.vals[j-1].time;
+            tc = act.time - m->h; // i(t - h)
+
+            if (test_edge(tc, el.vals[0].time, el.vals[el.cvals - 1].time))
+            {
+                segment_sum += PENALTY;
+                continue;
+            }
 
             tmpj = j - 1;
-            while (tc <= ta && tmpj > 0)
-                ta = db_values[i].vals[--tmpj].time;
+            while (tc <= ta && --tmpj >= 0)
+                ta = el.vals[tmpj].time;
 
             tmpj = tmpj + 1;
 
-            tb = db_values[i].vals[tmpj].time;
-            b = db_values[i].vals[tmpj].ist;
-            a = db_values[i].vals[tmpj-1].ist;
+            tb = el.vals[tmpj].time;
+            b = el.vals[tmpj].ist;
+            a = el.vals[tmpj-1].ist;
 
             itmh = (tc - ta) / (tb - ta) * (b - a) + a; // i(t - h)
-
-            act = db_values[i].vals[j];
 
             phi = (act.ist - itmh) / m->h;
 
@@ -217,8 +230,14 @@ void fitness(member *m)
             left = I + theta;
 
             // ** RIGHT
-            ta = db_values[i].vals[j].time;
-            tc = db_values[i].vals[j].time + m->dt + m->k*phi;
+            ta = el.vals[j].time;
+            tc = el.vals[j].time + m->dt + m->k*phi;
+
+            if (test_edge(tc, el.vals[0].time, el.vals[el.cvals - 1].time))
+            {
+                segment_sum += PENALTY;
+                continue;
+            }
 
             sign = (int) copysignf(1.0, tc - ta);
 
@@ -226,42 +245,47 @@ void fitness(member *m)
             {
             case 1:
                 tmpj = j + 1;
-                tb = db_values[i].vals[tmpj].time;
-                while (tc > tb && tmpj < (db_values[i].cvals - 1))
-                    tb = db_values[i].vals[++tmpj].time;
+                tb = el.vals[tmpj].time;
+                while (tc > tb && ++tmpj < el.cvals)
+                    tb = el.vals[tmpj].time;
 
                 tmpj = tmpj - 1;
-
-                ta = db_values[i].vals[tmpj].time;
+                ta = el.vals[tmpj].time;
                 break;
 
             case -1:
                 tmpj = j - 1;
-                ta = db_values[i].vals[tmpj].time;
-                while (tc < ta && tmpj > 0)
-                    ta = db_values[i].vals[--tmpj].time;
+                ta = el.vals[tmpj].time;
+                while (tc < ta && --tmpj >= 0)
+                    ta = el.vals[tmpj].time;
 
-                tb = db_values[i].vals[tmpj + 1].time;
+                tb = el.vals[tmpj + 1].time;
                 break;
             } // tmpj -> a, tmpj + 1 -> b
 
-            a = db_values[i].vals[tmpj].ist;
-            b = db_values[i].vals[tmpj+1].ist;
+            a = el.vals[tmpj].ist;
+            b = el.vals[tmpj+1].ist;
 
             ipm = (tc - ta) / (tb - ta) * (b - a) + a;
 
-            tb = db_values[i].vals[j+1].time;
+            tb = el.vals[j+1].time;
             tc = act.time + m->dt; // i(t+dt)
 
+            if (test_edge(tc, el.vals[0].time, el.vals[el.cvals - 1].time))
+            {
+                segment_sum += PENALTY;
+                continue;
+            }
+
             tmpj = j + 1;
-            while (tc > tb && tmpj < (db_values[i].cvals - 1))
-                tb = db_values[i].vals[++tmpj].time;
+            while (tc > tb && ++tmpj < el.cvals)
+                tb = el.vals[tmpj].time;
 
             tmpj = tmpj - 1;
 
-            ta = db_values[i].vals[tmpj].time;
-            a = db_values[i].vals[tmpj].ist;
-            b = db_values[i].vals[tmpj+1].ist;
+            ta = el.vals[tmpj].time;
+            a = el.vals[tmpj].ist;
+            b = el.vals[tmpj+1].ist;
 
             ipdt = (tc - ta) / (tb - ta) * (b - a) + a;
 
@@ -270,7 +294,7 @@ void fitness(member *m)
             segment_sum += get_metric(left, right);
         }
 
-        act_fit = get_eval(segment_sum / (db_values[i].cvals - 4), act_fit, i);
+        act_fit = get_eval(segment_sum / (el.cvals - 4), act_fit, i);
     }
 
     m->fitness = act_fit;

@@ -30,7 +30,9 @@ double iso2double(const char *time) {
     time_t tval = mktime(&tm);
 
     const double secsPerDay = 24.0*60.0*60.0;
+    const time_t secsPer25years = 788400000;
     const double invSecsPerDay = 1.0 / secsPerDay;
+    tval -= secsPer25years;
 
     return ((double) tval)*invSecsPerDay;
 }

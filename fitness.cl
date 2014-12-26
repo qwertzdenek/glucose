@@ -1,6 +1,6 @@
 /*
 The MIT License (MIT)
-Copyright (c) 2014 Zdeněk Janeček
+Copyright (c) 2014 Zden?k Jane?ek
 
 ** Glucose project**
 OpenCL evolution
@@ -9,6 +9,8 @@ OpenCL evolution
 #define METRIC_ABS 10
 #define METRIC_SQ 11
 #define METRIC_MAX 12
+
+#define PENALTY 10000.0f
 
 typedef struct
 {
@@ -34,34 +36,40 @@ typedef struct
 } member;
 
 __kernel void solve_equation (const int num_seg_vals, __global const mvalue* seg_vals,
-    __global const int* seg_lenghts, const member m, __global float* seg_vals_res, const char metric_type)
+                              __global const int* seg_lenghts, const member m, __global float* seg_vals_res, const char metric_type)
 {
     float phi, psi, I, theta, left, right;
     float itmh, ipm, ipdt;
     float a, b; // ist vals
     float ta, tb, tc; // interpolated times
-		float result;
+    float result;
     int s, tmpj;
     mvalue act;
 
     const int idx = get_global_id(0);
     const int idy = get_global_id(1);
     const int seg = idy * get_global_size(0);
-		const int len = seg_lenghts[idy];
+    const int len = seg_lenghts[idy];
 
-	  if (idy >= num_seg_vals)
-				return;
+    if (idy >= num_seg_vals)
+        return;
 
     if (idx < 2)
         return;
 
-		if (idx >= len - 2)
-				return;
+    if (idx >= len - 2)
+        return;
 
     act = seg_vals[seg + idx];
 
     ta = seg_vals[seg + idx - 1].time;
     tc = act.time - m.h; // i(t - h)
+		
+		if (tc < seg_vals[seg].time || tc > seg_vals[seg + len - 1].time)
+		{
+				seg_vals_res[seg + idx] = PENALTY;
+				return;
+		}
 
     tmpj = idx - 1;
     while (tc <= ta && --tmpj >= 0)
@@ -87,6 +95,12 @@ __kernel void solve_equation (const int num_seg_vals, __global const mvalue* seg
     // ** RIGHT
     ta = act.time;
     tc = act.time + m.dt + m.k * phi;
+		
+		if (tc < seg_vals[seg].time || tc > seg_vals[seg + len - 1].time)
+		{
+				seg_vals_res[seg + idx] = PENALTY;
+				return;
+		}
 
     s = (int) sign(tc - ta);
 
@@ -119,9 +133,15 @@ __kernel void solve_equation (const int num_seg_vals, __global const mvalue* seg
     tb = seg_vals[seg + idx + 1].time;
     tc = act.time + m.dt; // i(t+dt)
 
+		if (tc < seg_vals[seg].time || tc > seg_vals[seg + len - 1].time)
+		{
+				seg_vals_res[seg + idx] = PENALTY;
+				return;
+		}
+
     tmpj = idx + 1;
     while (tc > tb && ++tmpj < len)
-			  tb = seg_vals[seg + tmpj].time;
+        tb = seg_vals[seg + tmpj].time;
 
     tmpj = tmpj - 1;
 
@@ -133,35 +153,35 @@ __kernel void solve_equation (const int num_seg_vals, __global const mvalue* seg
 
     right = m.m * ipm + m.n * ipdt;
 
-		switch (metric_type)
-		{
-		case METRIC_ABS:
-		case METRIC_MAX:
-			  result = fabs(left) - fabs(right);
-			  break;
-		case METRIC_SQ:
-				result = left * left - right * right;
-				break;
-		default:
-				result = 0.0f;
-				break;
-		}
+    switch (metric_type)
+    {
+    case METRIC_ABS:
+    case METRIC_MAX:
+        result = fabs(left) - fabs(right);
+        break;
+    case METRIC_SQ:
+        result = left * left - right * right;
+        break;
+    default:
+        result = 0.0f;
+        break;
+    }
 
-		seg_vals_res[seg + idx] = result;
+    seg_vals_res[seg + idx] = result;
 }
 
 __kernel void solve_avg (const int max_seg_vals, __global const float* seg_vals_res,
-    __global const int* seg_lenghts, __global float* res)
+                         __global const int* seg_lenghts, __global float* res)
 {
-		int i;
-		float result = 0;
+    int i;
+    float result = 0;
     const int seg = get_global_id(0);
-	  const int offset = seg * max_seg_vals;
+    const int offset = seg * max_seg_vals;
 
-	  for (i = 2; i < seg_lenghts[seg] - 2; i++)
-		{
-			  result += seg_vals_res[offset + i];
-		}
-		
-		res[seg] = result / (seg_lenghts[seg] - 4);
+    for (i = 2; i < seg_lenghts[seg] - 2; i++)
+    {
+        result += seg_vals_res[offset + i];
+    }
+
+    res[seg] = result / (seg_lenghts[seg] - 4);
 }

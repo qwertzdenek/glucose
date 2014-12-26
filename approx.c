@@ -104,7 +104,7 @@ void filter(mvalue_ptr *val, int db_size)
     for (i = 0; i < db_size; i++)
     {
         // insert left bound value because of aproximation
-        val[i].vals[0].time = val[i].vals[0].time - 365.0f;
+        val[i].vals[0].time = val[i].vals[0].time - 730.0f;
         val[i].vals[0].blood = 4.0f;
         val[i].vals[0].ist = 4.0f;
 
@@ -139,12 +139,14 @@ void filter(mvalue_ptr *val, int db_size)
         // memmove
         memmove(val[i].vals + 1, val[i].vals + index, ncvals * sizeof(mvalue));
 
-        // insert left bound value because of aproximation
-        val[i].vals[ncvals + 1].time = val[i].vals[j].time + 365.0f;
-        val[i].vals[ncvals + 1].blood = 4.0f;
-        val[i].vals[ncvals + 1].ist = 4.0f;
+        ncvals += 2;
 
-        val[i].cvals = ncvals + 2;
+        // insert left bound value because of aproximation
+        val[i].vals[ncvals - 1].time = val[i].vals[j].time + 730.0f;
+        val[i].vals[ncvals - 1].blood = 4.0f;
+        val[i].vals[ncvals - 1].ist = 4.0f;
+
+        val[i].cvals = ncvals;
 
         approx_blood(val[i].vals, ncvals);
         approx_ist(val[i].vals, ncvals);

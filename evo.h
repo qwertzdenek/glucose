@@ -11,6 +11,8 @@ evo.h
 
 #include "structures.h"
 
+#define PENALTY 10000.0f
+
 void evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metric_type);
 void evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metric_type);
 void evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metric_type);
