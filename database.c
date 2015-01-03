@@ -19,8 +19,11 @@ database.c
 mvalue_ptr *db_private;
 
 /**
- * time string to parse
- * tm result structure
+ * converts ISO time formatted string to the double value.
+ * Day has value of 1. It starts in the year 1995.
+ *
+ * param time string to parse
+ * return time in double
  */
 double iso2double(const char *time) {
     struct tm tm;
@@ -37,7 +40,9 @@ double iso2double(const char *time) {
     return ((double) tval)*invSecsPerDay;
 }
 
-/* callbacks for SQLite3 */
+/**
+ * callback for SQLite3. It parse one row and saves it to the db_private array.
+ */
 int cb_value(void *id_ptr, int argc, char **argv, char **azColName)
 {
     int id = *((int *) id_ptr);
@@ -54,13 +59,14 @@ int cb_value(void *id_ptr, int argc, char **argv, char **azColName)
     db_private[id].vals[vc].blood = argv[1] == NULL ? 0.0f : strtof(argv[1], &endptr);
     db_private[id].vals[vc].ist = argv[2] == NULL ? 0.0f : strtof(argv[2], &endptr);
 
-    //printf("%d: %.5f blood=%.2f ist=%.2f\n", id, db_private[id].vals[vc].time, db_private[id].vals[vc].blood, db_private[id].vals[vc].ist);
-
     db_private[id].cvals++;
 
     return 0;
 }
 
+/**
+ * callback for SQLite3. It parse count of rows and saves result to the res.
+ */
 int cb_size(void *res, int argc, char **argv, char **azColName)
 {
     char *err_ptr = NULL;
@@ -71,6 +77,12 @@ int cb_size(void *res, int argc, char **argv, char **azColName)
     return 0;
 }
 
+/**
+ * This method does database queries and fills arguments.
+ * param file database file path on the disk
+ * param db_values target database array address
+ * param cval database size
+ */
 int init_data(char *file, mvalue_ptr **db_values, int *cval)
 {
     int i;
@@ -89,7 +101,7 @@ int init_data(char *file, mvalue_ptr **db_values, int *cval)
     }
 
     // count of measured segments
-    rc = sqlite3_exec(db, "select count(distinct segmentid) from measuredvalue;", cb_size, cval, &zErrMsg);
+    rc = sqlite3_exec(db, "SELECT count(distinct segmentid) FROM measuredvalue;", cb_size, cval, &zErrMsg);
     if (rc != SQLITE_OK)
     {
         fprintf(stderr, "SQL error: %s\n", zErrMsg);
@@ -105,7 +117,7 @@ int init_data(char *file, mvalue_ptr **db_values, int *cval)
     // load data
     for (i = 0; i < *cval; i++)
     {
-        sprintf((char *) &query, "SELECT count(measuredat) FROM measuredvalue WHERE segmentid==%d GROUP BY segmentid;", i + 1);
+        sprintf((char *) &query, "SELECT count() FROM measuredvalue WHERE segmentid==%d GROUP BY segmentid;", i + 1);
         sqlite3_exec(db, (char *) query, cb_size, &query_size, NULL);
 
         db_private[i].vals = (mvalue *) malloc(query_size * sizeof(mvalue));

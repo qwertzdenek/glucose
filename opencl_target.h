@@ -9,6 +9,9 @@ opencl_target.h
 #ifndef OPENCL_TARGET_H_INCLUDED
 #define OPENCL_TARGET_H_INCLUDED
 
+#define OPENCL_ERROR -1
+#define OPENCL_OK 0
+
 #include "structures.h"
 
 int init_opencl(int num_values, mvalue_ptr *values, int metric_type);

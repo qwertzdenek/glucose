@@ -11,6 +11,10 @@ evo.h
 
 #include "structures.h"
 
+#define GENERATION_COUNT 1000
+#define F 0.75 // mutation constant
+#define CR 0.3 // threshold
+
 #define PENALTY 10000.0f
 
 void evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metric_type);

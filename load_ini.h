@@ -9,10 +9,8 @@ load_ini.h
 #ifndef LOAD_INI_H_INCLUDED
 #define LOAD_INI_H_INCLUDED
 
-#define INI_FILE "config.ini"
-
 #include "structures.h"
 
-int load_ini(bounds *bconf);
+int load_ini(char *file, bounds *bconf);
 
 #endif // LOAD_INI_H_INCLUDED

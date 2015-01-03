@@ -123,13 +123,13 @@ int read_bounds(FILE *fp, bounds *bconf)
     return 0;
 }
 
-int load_ini(bounds *bconf)
+int load_ini(char *file, bounds *bconf)
 {
     char buf[12];
     char *ptr;
 
     // TODO: loading
-    FILE *fp = fopen(INI_FILE, "r");
+    FILE *fp = fopen(file, "r");
 
     // read first symbol
     ptr = (char *) &buf;

@@ -11,6 +11,11 @@ approx.c
 
 #include "structures.h"
 
+/**
+ * this internal method approximates only missing blood values
+ * param vals pointer of the first array element
+ * param len length of the array
+ */
 void approx_blood(mvalue *vals, int len)
 {
     int i;
@@ -52,6 +57,11 @@ void approx_blood(mvalue *vals, int len)
     }
 }
 
+/**
+ * This internal method approximates only missing ist values.
+ * param vals pointer of the first array element
+ * param len length of the array
+ */
 void approx_ist(mvalue *vals, int len)
 {
     int i;
@@ -93,6 +103,11 @@ void approx_ist(mvalue *vals, int len)
     }
 }
 
+/**
+ * This function finds missing values and finds their linear interpolation.
+ * param val all segments in the database
+ * param db_size segment database size
+ */
 void filter(mvalue_ptr *val, int db_size)
 {
     int i, j;
@@ -104,7 +119,7 @@ void filter(mvalue_ptr *val, int db_size)
     for (i = 0; i < db_size; i++)
     {
         // insert left bound value because of aproximation
-        val[i].vals[0].time = val[i].vals[0].time - 730.0f;
+        val[i].vals[0].time = val[i].vals[0].time - 42.0f; // keep edges safe
         val[i].vals[0].blood = 4.0f;
         val[i].vals[0].ist = 4.0f;
 
@@ -118,7 +133,7 @@ void filter(mvalue_ptr *val, int db_size)
             j++;
         index_two = j;
 
-        // data begin
+        // frame begin
         index = fmaxl(index_one, index_two);
 
         j = val[i].cvals - 1;
@@ -131,18 +146,18 @@ void filter(mvalue_ptr *val, int db_size)
             j--;
         index_two = j;
 
-        // data end
+        // frame end
         index_two = fminl(index_one, index_two);
 
         ncvals = index_two - index + 1;
 
-        // memmove
+        // memmove of valid frame to the beginng
         memmove(val[i].vals + 1, val[i].vals + index, ncvals * sizeof(mvalue));
 
         ncvals += 2;
 
         // insert left bound value because of aproximation
-        val[i].vals[ncvals - 1].time = val[i].vals[j].time + 730.0f;
+        val[i].vals[ncvals - 1].time = val[i].vals[j].time + 42.0f; // keep edges safe
         val[i].vals[ncvals - 1].blood = 4.0f;
         val[i].vals[ncvals - 1].ist = 4.0f;
 

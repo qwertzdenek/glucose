@@ -107,25 +107,6 @@ int init_opencl(int num_values, mvalue_ptr *values, int metric_type)
 
     int max = 0;
 
-    // load values to dynamic memory
-    for (i = 0; i < num_values; i++)
-        max = fmaxl(max, values[i].cvals);
-
-    mvalue *seg_vals = (mvalue *) malloc(sizeof(mvalue) * max * num_values);
-    memset(seg_vals, 0, sizeof(mvalue) * max * num_values); // initialize
-
-    for (i = 0; i < num_values; i++)
-        memcpy(seg_vals + i * max, values[i].vals, sizeof(mvalue) * values[i].cvals);
-
-    // create lenghts array
-    int *lenghts = (int *) malloc(sizeof(int) * num_values);
-    memset(lenghts, 0, sizeof(int) * num_values); // initialize
-
-    for (i = 0; i < num_values; i++)
-        lenghts[i] = values[i].cvals;
-
-    source = read_source_file("fitness.cl");
-
     // Probe platforms
     clGetPlatformIDs(0, NULL, &platformCount);
     platforms = (cl_platform_id *) malloc(sizeof(cl_platform_id) * platformCount);
@@ -153,13 +134,18 @@ int init_opencl(int num_values, mvalue_ptr *values, int metric_type)
         free(devices);
     }
 
+    if (platformCount == 0)
+    {
+        fprintf(stderr, "OpenCL platform not found\n");
+        return OPENCL_ERROR;
+    }
+
     // ASK user
     do
     {
-//        puts("platform number: ");
-//        fgets((char *) string, 7, stdin);
-//        i = strtol(string, NULL, 10);
-        i = 0;
+        puts("platform number: ");
+        fgets((char *) string, 7, stdin);
+        i = strtol(string, NULL, 10);
     }
     while (i >= platformCount);
 
@@ -170,12 +156,30 @@ int init_opencl(int num_values, mvalue_ptr *values, int metric_type)
 
     do
     {
-//        puts("device number: ");
-//        fgets((char *) string, 7, stdin);
-//        j = strtol(string, NULL, 10);
-        j = 0;
+        puts("device number: ");
+        fgets((char *) string, 7, stdin);
+        j = strtol(string, NULL, 10);
     }
     while (j >= deviceCount);
+
+    // load values to dynamic memory
+    for (i = 0; i < num_values; i++)
+        max = fmaxl(max, values[i].cvals);
+
+    mvalue *seg_vals = (mvalue *) malloc(sizeof(mvalue) * max * num_values);
+    memset(seg_vals, 0, sizeof(mvalue) * max * num_values); // initialize
+
+    for (i = 0; i < num_values; i++)
+        memcpy(seg_vals + i * max, values[i].vals, sizeof(mvalue) * values[i].cvals);
+
+    // create lenghts array
+    int *lenghts = (int *) malloc(sizeof(int) * num_values);
+    memset(lenghts, 0, sizeof(int) * num_values); // initialize
+
+    for (i = 0; i < num_values; i++)
+        lenghts[i] = values[i].cvals;
+
+    source = read_source_file("fitness.cl");
 
     // context properties list - must be terminated with 0
     properties[0]= CL_CONTEXT_PLATFORM; // specifies the platform to use
@@ -190,7 +194,7 @@ int init_opencl(int num_values, mvalue_ptr *values, int metric_type)
     }
 
     // create command queue
-    command_queue = clCreateCommandQueueWithProperties(context, devices[j], 0, &err);
+    command_queue = clCreateCommandQueue(context, devices[j], 0, &err);
     if (err != CL_SUCCESS)
     {
         printf("chyba ve vytváření fronty úloh %d\n", err);

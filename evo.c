@@ -14,33 +14,38 @@ evo.c
 #include <stdint.h>
 #include <math.h>
 
-//#include "opencl_target.h"
 #include "evo.h"
 #include "mwc64x_rng.h"
 #include "opencl_target.h"
 
-#define GENERATION_COUNT 1000
-
+// function pointers for different metric computation
 typedef float (*get_metric_func)(float left, float right);
 typedef float (*get_evaluation_func)(float new_val, float old_val, int count);
-
-const float F = 0.75; // mutation constant
-const float CR = 0.3; // threshold
 
 // database
 mvalue_ptr *db_values;
 int db_size;
+
 get_metric_func get_metric;
 get_evaluation_func get_eval;
+
+// swap buffers for the evolution
 member members[POPULATION_SIZE];
 member members_new[POPULATION_SIZE];
 
+// threading
 #define T_COUNT 4
 pthread_t workers[T_COUNT];
 pthread_spinlock_t spin;
 pthread_barrier_t barrier;
 static volatile int worker_counter;
 
+/**
+ * vector multiplication by float constant
+ * param a first vector
+ * param f constant
+ * param res result
+ */
 void mult(member *a, float f, member *res)
 {
     int i;
@@ -58,6 +63,12 @@ void mult(member *a, float f, member *res)
     res->fitness = 0.0f;
 }
 
+/**
+ * vector addition
+ * param a first vector
+ * param b second vector
+ * param res result
+ */
 void add(member *a, member *b, member *res)
 {
     int i;
@@ -77,6 +88,12 @@ void add(member *a, member *b, member *res)
     res->fitness = 0.0f;
 }
 
+/**
+ * vector division
+ * param a first vector
+ * param b second vector
+ * param res result
+ */
 void diff(member *a, member *b, member *res)
 {
     int i;
@@ -96,11 +113,25 @@ void diff(member *a, member *b, member *res)
     res->fitness = 0.0f;
 }
 
+/**
+ * linear interpolation between a and b by val
+ * param val interpolation coeficient. It should be between 0 and 1.
+ * param a first value
+ * param b second value
+ */
 float interp(float val, float a, float b)
 {
     return (b - a) * val + a;
 }
 
+/**
+ * It does cross of vector a and b.
+ * param a first member
+ * param b second member
+ * param res result member
+ * param s RNG seed. Initialize first.
+ * param range number range of the RNG
+ */
 void cross_m(member *a, member *b, member *res, uint64_t *s, uint32_t range)
 {
     int i;
@@ -120,31 +151,88 @@ void cross_m(member *a, member *b, member *res, uint64_t *s, uint32_t range)
     res->fitness = FLT_MAX;
 }
 
+/**
+ * Computes difference of absolute values from the left and right side.
+ * param left left side of the equation
+ * param right right side of the equation
+ */
 float metric_abs(float left, float right)
 {
     return fabsf(left) - fabsf(right);
 }
 
+/**
+ * Computes square value from the left and right side.
+ * param left left side of the equation
+ * param right right side of the equation
+ */
 float metric_square(float left, float right)
 {
     return left*left - right*right;
 }
 
+/**
+ * Computes continuesly added average.
+ * param new_val value added to the average
+ * param old_val old value of the average
+ * param i actual size of the sequence
+ */
 float evaluation_avg(float new_val, float old_val, int i)
 {
     return old_val * i / (i + 1) + new_val / (i + 1);
 }
 
+/**
+ * Returns the bigger of old and new value.
+ * param new_val new value
+ * param old_val old value
+ * param o not used parameter (API need it)
+ */
 float evaluation_max(float new_val, float old_val, int o)
 {
     return new_val > old_val ? new_val : old_val;
 }
 
+/**
+ * Tests if time is between low and high edge.
+ * param time tested time value
+ * param low low edge of window
+ * param high high edge of window
+ */
 inline int test_edge(float time, float low, float high)
 {
     return time < low || time > high;
 }
 
+void print_progress(float percent)
+{
+    printf("\r%.2f %%", percent);
+}
+
+/**
+ * prints values of all members in the array a. Member is an array of equation parameters.
+ * param a an array
+ * param s size of the array
+ */
+void print_array(member a[], int s)
+{
+    int i;
+
+    for (i = 0; i < s; i++)
+    {
+        printf("[%f %f %f %f %f %f %f %f %f %f %f %f]\n", a[i].p, a[i].cg, a[i].c, a[i].pp, a[i].cgp, a[i].cp, a[i].dt, a[i].h, a[i].k, a[i].m, a[i].n, a[i].fitness);
+    }
+
+    printf("\n");
+}
+
+/**
+ * Fills members array with initial setup
+ * param members an array of strucs to fill
+ * param bc basic chromosome pattern
+ * param s RNG seed value
+ * param range number range of the RNG
+ */
 void init_population(member members[], bounds bc, uint64_t *s, uint32_t range)
 {
     int i;
@@ -166,6 +254,9 @@ void init_population(member members[], bounds bc, uint64_t *s, uint32_t range)
     }
 }
 
+/**
+ * Fitness function
+ */
 void fitness(member *m)
 {
     int i, j;
@@ -188,8 +279,6 @@ void fitness(member *m)
     {
         segment_sum = 0;
         el = db_values[i];
-
-        //printf("i=%d len=%d\n", i, el.cvals);
 
         if (el.cvals < 5)
             continue;
@@ -300,6 +389,11 @@ void fitness(member *m)
     m->fitness = act_fit;
 }
 
+/**
+ * Serial version of differencial evolution
+ * param num_values size of the database
+ * param values
+ */
 void evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metric_type)
 {
     int i, j;
@@ -350,8 +444,8 @@ void evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metr
             c = MWC64X_Next(&state, range) / 4;
 
             diff(members + a, members + b, &op_vec); // -> diff vector
-            mult(&op_vec, F, &op_vec);              // -> weighted diff vector
-            add(members + c, &op_vec, &op_vec);     // -> noise vector
+            mult(&op_vec, F, &op_vec);               // -> weighted diff vector
+            add(members + c, &op_vec, &op_vec);      // -> noise vector
 
             cross_m(&op_vec, members + j, &op_vec, &state, range);
 
@@ -362,8 +456,12 @@ void evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metr
                 memcpy(members_new + j, &op_vec, sizeof(member));
         }
 
+        print_progress(100*((float) i / POPULATION_SIZE));
+
         memcpy((member *) members, (member *) members_new, sizeof(member) * POPULATION_SIZE);
     }
+
+    printf("\n\n");
 
     min_fit = FLT_MAX;
     for (i = 0; i < POPULATION_SIZE; i++)
@@ -374,6 +472,9 @@ void evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metr
             op_vec = members[i];
         }
     }
+
+    printf("Whole population:\n");
+    print_array(members, POPULATION_SIZE);
 
     printf("best [%f %f %f %f %f %f %f %f %f %f %f %f]\n",
            op_vec.p, op_vec.cg, op_vec.c, op_vec.pp, op_vec.cgp, op_vec.cp,
@@ -420,6 +521,7 @@ void *work_task(void *par)
         {
             memcpy((member *) members, (member *) members_new, sizeof(member) * POPULATION_SIZE);
             worker_counter = 0;
+            print_progress(100*((float) i / GENERATION_COUNT));
         }
         pthread_spin_unlock(&spin);
 
@@ -439,6 +541,8 @@ void evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int met
 
     db_values = values;
     db_size = num_values;
+
+    printf("** running pthread version with %d threads **\n", T_COUNT);
 
     switch (metric_type)
     {
@@ -489,6 +593,8 @@ void evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int met
     pthread_spin_destroy(&spin);
     pthread_barrier_destroy(&barrier);
 
+    printf("\n\n");
+
     memset(&bm, 0, sizeof(member));
     min_fit = FLT_MAX;
     for (i = 0; i < POPULATION_SIZE; i++)
@@ -499,6 +605,9 @@ void evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int met
             bm = members[i];
         }
     }
+
+    printf("Whole population:\n");
+    print_array(members, POPULATION_SIZE);
 
     printf("best [%f %f %f %f %f %f %f %f %f %f %f %f]\n",
            bm.p, bm.cg, bm.c, bm.pp, bm.cgp, bm.cp,
@@ -514,6 +623,8 @@ void evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metr
 
     uint64_t state;
     uint32_t range = 12*POPULATION_SIZE;
+
+    printf("** running OpenCL version **\n");
 
     MWC64X_Seed(&state, range, time(NULL));
     init_population(members, bconf, &state, range);
@@ -552,7 +663,11 @@ void evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metr
             if (members_new[j].fitness < members[j].fitness)
                 members[j] = members_new[j];
         }
+
+        print_progress(100*((float) i / GENERATION_COUNT));
     }
+
+    printf("\n\n");
 
     cl_cleanup();
 
@@ -566,7 +681,10 @@ void evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metr
         }
     }
 
-    printf("best [%f %f %f %f %f %f %f %f %f %f %f %f]\n",
+    printf("Whole population:\n");
+    print_array(members, POPULATION_SIZE);
+
+    printf("best was [%f %f %f %f %f %f %f %f %f %f %f %f]\n",
            op_vec.p, op_vec.cg, op_vec.c, op_vec.pp, op_vec.cgp, op_vec.cp,
            op_vec.dt, op_vec.h, op_vec.k, op_vec.m, op_vec.n, op_vec.fitness);
 }

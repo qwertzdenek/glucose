@@ -17,6 +17,11 @@ main.c
 #include "load_ini.h"
 #include "evo.h"
 
+/**
+ * frees segments in array
+ * param array pointer to the first array element
+ * param size count of segments in the
+ */
 void free_array(mvalue_ptr *array, int size)
 {
     int i;
@@ -30,18 +35,11 @@ void free_array(mvalue_ptr *array, int size)
         free(array);
 }
 
-void print_array(member a[], int s)
-{
-    int i;
-
-    for (i = 0; i < s; i++)
-    {
-        printf("[%f %f %f %f %f %f %f %f %f %f %f %f]\n", a[i].p, a[i].cg, a[i].c, a[i].pp, a[i].cgp, a[i].cp, a[i].dt, a[i].h, a[i].k, a[i].m, a[i].n, a[i].fitness);
-    }
-
-    printf("\n");
-}
-
+/**
+ * swap two elements of the array
+ * param array pointer to the first array element
+ * param size count of segments in the array
+ */
 void swap(mvalue_ptr *array, int i, int j)
 {
     mvalue_ptr tmp;
@@ -56,23 +54,28 @@ int main(int argc, char **argv)
     int db_size = 0;
     mvalue_ptr *db_values = NULL;
     bounds bconf;
+    int metrics[3] = {METRIC_ABS, METRIC_SQ, METRIC_MAX};
+    int i;
 
-    if (argc < 2)
+    if (argc < 3)
     {
-        printf("give a database name as an argument\n");
+        printf("give more arguments (like db.sqlite3 config.ini)\n");
         return 1;
     }
 
     // set universal locale (float use .)
     setlocale(LC_NUMERIC,"C");
 
+    // don't buff stdout
+    setbuf(stdout, NULL);
+
     // Config
-    if (access(INI_FILE, R_OK) == -1) {
-        fprintf(stderr, "bounds config file %s not found\n", INI_FILE);
+    if (access(argv[2], R_OK) == -1) {
+        fprintf(stderr, "bounds config file %s not found\n", argv[2]);
         return -2;
     }
 
-    load_ini(&bconf);
+    load_ini(argv[2], &bconf);
 
     // Database
     if (access(argv[1], R_OK) == -1) {
@@ -88,16 +91,22 @@ int main(int argc, char **argv)
 
     filter(db_values, db_size);
 
+    // TODO: provést paralelní výpočet pro každou metriku a vypsat dobu běhu programu, parametrech použitého algoritmu
+    // a vypíše nalezené parametry
+
+    // nakonec vypsat statistiky
+
+    printf("Velikost populace: %d\n", POPULATION_SIZE);
+    printf("Počet generací: %d\n", GENERATION_COUNT);
+    printf("Mutační konstanta: %f\n", F);
+    printf("Práh křížení: %f\n", CR);
+
     //evolution_serial(db_size, db_values, bconf, METRIC_ABS);
-    //evolution_serial(db_size, db_values, bconf, METRIC_SQ);
-    //evolution_serial(db_size, db_values, bconf, METRIC_MAX);
-
-    //evolution_pthread(db_size, db_values, bconf, METRIC_ABS);
-    //evolution_pthread(db_size, db_values, bconf, METRIC_SQ);
-
-    evolution_opencl(db_size, db_values, bconf, METRIC_ABS);
-
-    //print_array(members, POPULATION_SIZE);
+    for (i = 0; i < 3; i++)
+//    {
+//        evolution_pthread(db_size, db_values, bconf, metrics[i]);
+        evolution_opencl(db_size, db_values, bconf, metrics[i]);
+//    }
 
     // exit and clean up
     free_array(db_values, db_size);
