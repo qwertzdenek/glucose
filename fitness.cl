@@ -1,6 +1,6 @@
 /*
 The MIT License (MIT)
-Copyright (c) 2014 Zden?k Jane?ek
+Copyright (c) 2014 Zdenek Janecek
 
 ** Glucose project**
 OpenCL evolution
@@ -178,10 +178,10 @@ __kernel void solve_equation (const int num_seg_vals, __global const mvalue* seg
     seg_vals_res[res_prefix + seg + idx] = result;
 }
 
-// mapování na seg_vals_res
-// max_seg_vals maximální ?as -> x
-// seg_count po?et segment? -> y
-// get_global_size(0) po?et ?len? -> z
+// mapovani na seg_vals_res
+// max_seg_vals maximalni cas -> x
+// seg_count pocet segmentu -> y
+// get_global_size(0) pocet clenu -> z
 
 __kernel void solve_avg (const int max_seg_vals, const int seg_count, __global const float* seg_vals_res,
                          __global const int* seg_lenghts, __global float* res, const char metric_type)
