@@ -394,7 +394,7 @@ void fitness(member *m)
  * param num_values size of the database
  * param values
  */
-void evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metric_type)
+float evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metric_type)
 {
     int i, j;
     int a, b, c;
@@ -420,7 +420,7 @@ void evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metr
         get_eval = evaluation_max;
         break;
     default:
-        return;
+        return 0.0f;
     }
 
     uint64_t state;
@@ -456,7 +456,7 @@ void evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metr
                 memcpy(members_new + j, &op_vec, sizeof(member));
         }
 
-        print_progress(100*((float) i / POPULATION_SIZE));
+        print_progress(100*((float) i / GENERATION_COUNT));
 
         memcpy((member *) members, (member *) members_new, sizeof(member) * POPULATION_SIZE);
     }
@@ -479,6 +479,7 @@ void evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metr
     printf("best [%f %f %f %f %f %f %f %f %f %f %f %f]\n",
            op_vec.p, op_vec.cg, op_vec.c, op_vec.pp, op_vec.cgp, op_vec.cp,
            op_vec.dt, op_vec.h, op_vec.k, op_vec.m, op_vec.n, op_vec.fitness);
+    return op_vec.fitness;
 }
 
 void *work_task(void *par)
@@ -531,13 +532,13 @@ void *work_task(void *par)
     pthread_exit(NULL);
 }
 
-void evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metric_type)
+float evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metric_type)
 {
     int i;
     long k;
     float min_fit;
     pthread_attr_t attr;
-    member bm;
+    member op_vec;
 
     db_values = values;
     db_size = num_values;
@@ -559,7 +560,7 @@ void evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int met
         get_eval = evaluation_max;
         break;
     default:
-        return;
+        return 0.0f;
     }
 
     uint64_t state;
@@ -595,14 +596,14 @@ void evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int met
 
     printf("\n\n");
 
-    memset(&bm, 0, sizeof(member));
+    memset(&op_vec, 0, sizeof(member));
     min_fit = FLT_MAX;
     for (i = 0; i < POPULATION_SIZE; i++)
     {
         if (fabs(members[i].fitness) < fabs(min_fit))
         {
             min_fit = members[i].fitness;
-            bm = members[i];
+            op_vec = members[i];
         }
     }
 
@@ -610,11 +611,12 @@ void evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int met
     print_array(members, POPULATION_SIZE);
 
     printf("best [%f %f %f %f %f %f %f %f %f %f %f %f]\n",
-           bm.p, bm.cg, bm.c, bm.pp, bm.cgp, bm.cp,
-           bm.dt, bm.h, bm.k, bm.m, bm.n, bm.fitness);
+           op_vec.p, op_vec.cg, op_vec.c, op_vec.pp, op_vec.cgp, op_vec.cp,
+           op_vec.dt, op_vec.h, op_vec.k, op_vec.m, op_vec.n, op_vec.fitness);
+    return op_vec.fitness;
 }
 
-void evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metric_type)
+float evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metric_type)
 {
     int i, j;
     int a, b, c;
@@ -629,13 +631,15 @@ void evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metr
     MWC64X_Seed(&state, range, time(NULL));
     init_population(members, bconf, &state, range);
 
-    init_opencl(num_values, values, metric_type);
+    init_opencl(num_values, values, POPULATION_SIZE, metric_type);
 
     MWC64X_Seed(&state, range, time(NULL));
     init_population(members, bconf, &state, range);
 
     for (i = 0; i < GENERATION_COUNT; i++)
     {
+        min_fit = FLT_MAX;
+
         range = 4*POPULATION_SIZE;
         MWC64X_Seed(&state, range, time(NULL));
 
@@ -655,15 +659,17 @@ void evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metr
             memcpy(members_new + j, &op_vec, sizeof(member));
         }
         // spočítej přes opencl fitness pro každého člena v members_new
-        cl_compute_fitness(POPULATION_SIZE, members_new);
+        cl_compute_fitness(members_new);
 
         // nahraď v members lepší členy z members_new
         for (j = 0; j < POPULATION_SIZE; j++)
         {
-            if (members_new[j].fitness < members[j].fitness)
+            if (fabs(members_new[j].fitness) < fabs(members[j].fitness))
                 members[j] = members_new[j];
+            min_fit = fminf(fabs(members[j].fitness), fabs(min_fit));
         }
 
+        //printf("%.5f\n", min_fit);
         print_progress(100*((float) i / GENERATION_COUNT));
     }
 
@@ -687,4 +693,5 @@ void evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metr
     printf("best was [%f %f %f %f %f %f %f %f %f %f %f %f]\n",
            op_vec.p, op_vec.cg, op_vec.c, op_vec.pp, op_vec.cgp, op_vec.cp,
            op_vec.dt, op_vec.h, op_vec.k, op_vec.m, op_vec.n, op_vec.fitness);
+    return op_vec.fitness;
 }

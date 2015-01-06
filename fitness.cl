@@ -35,8 +35,9 @@ typedef struct
     float fitness;
 } member;
 
-__kernel void solve_equation (const int num_seg_vals, __global const mvalue* seg_vals,
-                              __global const int* seg_lenghts, const member m, __global float* seg_vals_res, const char metric_type)
+__kernel void solve_equation (const int num_seg_vals, __global const mvalue* seg_vals, __global const int* seg_lenghts,
+                              const int num_members, __global const member *members,
+                              __global float* seg_vals_res, const char metric_type)
 {
     float phi, psi, I, theta, left, right;
     float itmh, ipm, ipdt;
@@ -45,11 +46,14 @@ __kernel void solve_equation (const int num_seg_vals, __global const mvalue* seg
     float result;
     int s, tmpj;
     mvalue act;
+    member m;
 
-    const int idx = get_global_id(0);
-    const int idy = get_global_id(1);
+    const int idx = get_global_id(0); // time
+    const int idy = get_global_id(1); // segment
+    const int idz = get_global_id(2); // member
     const int seg = idy * get_global_size(0);
     const int len = seg_lenghts[idy];
+    const int res_prefix = idz * num_seg_vals * get_global_size(0);
 
     if (idy >= num_seg_vals)
         return;
@@ -60,16 +64,20 @@ __kernel void solve_equation (const int num_seg_vals, __global const mvalue* seg
     if (idx >= len - 2)
         return;
 
+    if (idz >= num_members)
+        return;
+
     act = seg_vals[seg + idx];
+    m = members[idz];
 
     ta = seg_vals[seg + idx - 1].time;
     tc = act.time - m.h; // i(t - h)
-		
-		if (tc < seg_vals[seg].time || tc > seg_vals[seg + len - 1].time)
-		{
-				seg_vals_res[seg + idx] = PENALTY;
-				return;
-		}
+
+    if (tc < seg_vals[seg].time || tc > seg_vals[seg + len - 1].time)
+    {
+        seg_vals_res[res_prefix + seg + idx] = PENALTY;
+        return;
+    }
 
     tmpj = idx - 1;
     while (tc <= ta && --tmpj >= 0)
@@ -95,12 +103,12 @@ __kernel void solve_equation (const int num_seg_vals, __global const mvalue* seg
     // ** RIGHT
     ta = act.time;
     tc = act.time + m.dt + m.k * phi;
-		
-		if (tc < seg_vals[seg].time || tc > seg_vals[seg + len - 1].time)
-		{
-				seg_vals_res[seg + idx] = PENALTY;
-				return;
-		}
+
+    if (tc < seg_vals[seg].time || tc > seg_vals[seg + len - 1].time)
+    {
+        seg_vals_res[res_prefix + seg + idx] = PENALTY;
+        return;
+    }
 
     s = (int) sign(tc - ta);
 
@@ -133,11 +141,11 @@ __kernel void solve_equation (const int num_seg_vals, __global const mvalue* seg
     tb = seg_vals[seg + idx + 1].time;
     tc = act.time + m.dt; // i(t+dt)
 
-		if (tc < seg_vals[seg].time || tc > seg_vals[seg + len - 1].time)
-		{
-				seg_vals_res[seg + idx] = PENALTY;
-				return;
-		}
+    if (tc < seg_vals[seg].time || tc > seg_vals[seg + len - 1].time)
+    {
+        seg_vals_res[res_prefix + seg + idx] = PENALTY;
+        return;
+    }
 
     tmpj = idx + 1;
     while (tc > tb && ++tmpj < len)
@@ -167,21 +175,47 @@ __kernel void solve_equation (const int num_seg_vals, __global const mvalue* seg
         break;
     }
 
-    seg_vals_res[seg + idx] = result;
+    seg_vals_res[res_prefix + seg + idx] = result;
 }
 
-__kernel void solve_avg (const int max_seg_vals, __global const float* seg_vals_res,
-                         __global const int* seg_lenghts, __global float* res)
-{
-    int i;
-    float result = 0;
-    const int seg = get_global_id(0);
-    const int offset = seg * max_seg_vals;
+// mapování na seg_vals_res
+// max_seg_vals maximální ?as -> x
+// seg_count po?et segment? -> y
+// get_global_size(0) po?et ?len? -> z
 
-    for (i = 2; i < seg_lenghts[seg] - 2; i++)
+__kernel void solve_avg (const int max_seg_vals, const int seg_count, __global const float* seg_vals_res,
+                         __global const int* seg_lenghts, __global float* res, const char metric_type)
+{
+    const int mem = get_global_id(0);
+
+    int i, j;
+    float result = 0.0f;
+    float sum;
+    const int res_prefix = mem * seg_count * max_seg_vals;
+
+    for (i = 0; i < seg_count; i++)
     {
-        result += seg_vals_res[offset + i];
+        sum = 0.0f;
+        for (j = 2; j < seg_lenghts[i] - 2; j++)
+        {
+            sum += seg_vals_res[res_prefix + i * max_seg_vals + j];
+        }
+
+        sum /= (seg_lenghts[i] - 4);
+
+        switch (metric_type)
+        {
+        case METRIC_ABS:
+        case METRIC_SQ:
+            result = result * i / (i + 1) + sum / (i + 1);
+            break;
+        case METRIC_MAX:
+            result = fmax(sum, result);
+            break;
+        default:
+            return;
+        }
     }
 
-    res[seg] = result / (seg_lenghts[seg] - 4);
+    res[mem] = result;
 }

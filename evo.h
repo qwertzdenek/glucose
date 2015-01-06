@@ -11,15 +11,15 @@ evo.h
 
 #include "structures.h"
 
-#define GENERATION_COUNT 1000
-#define F 0.75 // mutation constant
-#define CR 0.3 // threshold
+#define GENERATION_COUNT 500
+#define F 0.45 // mutation constant
+#define CR 0.4 // threshold
 
 #define PENALTY 10000.0f
 
-void evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metric_type);
-void evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metric_type);
-void evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metric_type);
+float evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metric_type);
+float evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metric_type);
+float evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metric_type);
 
 void cl_cleanup();
 

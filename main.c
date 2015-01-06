@@ -11,6 +11,7 @@ main.c
 #include <stdlib.h>
 #include <locale.h>
 #include <math.h>
+#include <float.h>
 
 #include "database.h"
 #include "approx.h"
@@ -55,7 +56,6 @@ int main(int argc, char **argv)
     mvalue_ptr *db_values = NULL;
     bounds bconf;
     int metrics[3] = {METRIC_ABS, METRIC_SQ, METRIC_MAX};
-    int i;
 
     if (argc < 3)
     {
@@ -64,7 +64,7 @@ int main(int argc, char **argv)
     }
 
     // set universal locale (float use .)
-    setlocale(LC_NUMERIC,"C");
+    setlocale(LC_NUMERIC,"cs_CZ");
 
     // don't buff stdout
     setbuf(stdout, NULL);
@@ -96,16 +96,17 @@ int main(int argc, char **argv)
 
     // nakonec vypsat statistiky
 
+/*
     printf("Velikost populace: %d\n", POPULATION_SIZE);
     printf("Počet generací: %d\n", GENERATION_COUNT);
     printf("Mutační konstanta: %f\n", F);
     printf("Práh křížení: %f\n", CR);
+*/
 
     //evolution_serial(db_size, db_values, bconf, METRIC_ABS);
-    for (i = 0; i < 3; i++)
+//    for (i = 0; i < 3; i++)
 //    {
-//        evolution_pthread(db_size, db_values, bconf, metrics[i]);
-        evolution_opencl(db_size, db_values, bconf, metrics[i]);
+        evolution_pthread(db_size, db_values, bconf, metrics[0]);
 //    }
 
     // exit and clean up
