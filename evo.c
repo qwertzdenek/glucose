@@ -6,8 +6,16 @@ Copyright (c) 2014 Zdeněk Janeček
 evo.c
 */
 
+#ifdef __MINGW32__
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
+
 #include <pthread.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <float.h>
 #include <time.h>
@@ -17,6 +25,16 @@ evo.c
 #include "evo.h"
 #include "mwc64x_rng.h"
 #include "opencl_target.h"
+
+// Windows hack
+#ifdef __MINGW32__
+#ifndef _SC_NPROCESSORS_ONLN
+SYSTEM_INFO info;
+GetSystemInfo(&info);
+#define sysconf(a) info.dwNumberOfProcessors
+#define _SC_NPROCESSORS_ONLN
+#endif
+#endif
 
 // function pointers for different metric computation
 typedef float (*get_metric_func)(float left, float right);
@@ -34,11 +52,12 @@ member members[POPULATION_SIZE];
 member members_new[POPULATION_SIZE];
 
 // threading
-#define T_COUNT 4
-pthread_t workers[T_COUNT];
+int cpu_count;
+pthread_t *workers;
 pthread_spinlock_t spin;
 pthread_barrier_t barrier;
 static volatile int worker_counter;
+static uint64_t seed;
 
 /**
  * vector multiplication by float constant
@@ -394,7 +413,7 @@ void fitness(member *m)
  * param num_values size of the database
  * param values
  */
-float evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metric_type)
+int evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metric_type, member *result)
 {
     int i, j;
     int a, b, c;
@@ -420,11 +439,13 @@ float evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int met
         get_eval = evaluation_max;
         break;
     default:
-        return 0.0f;
+        return EVO_ERROR;
     }
 
     uint64_t state;
     uint32_t range = 12*POPULATION_SIZE;
+
+    printf("** running serial version **\n");
 
     MWC64X_Seed(&state, range, time(NULL));
     init_population(members, bconf, &state, range);
@@ -434,14 +455,14 @@ float evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int met
 
     for (i = 0; i < GENERATION_COUNT; i++)
     {
-        range = 4*POPULATION_SIZE;
+        range = POPULATION_SIZE;
         MWC64X_Seed(&state, range, time(NULL));
 
         for (j = 0; j < POPULATION_SIZE; j++)
         {
-            a = MWC64X_Next(&state, range) / 4;
-            b = MWC64X_Next(&state, range) / 4;
-            c = MWC64X_Next(&state, range) / 4;
+            a = MWC64X_Next(&state, range);
+            b = MWC64X_Next(&state, range);
+            c = MWC64X_Next(&state, range);
 
             diff(members + a, members + b, &op_vec); // -> diff vector
             mult(&op_vec, F, &op_vec);               // -> weighted diff vector
@@ -473,13 +494,8 @@ float evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int met
         }
     }
 
-    printf("Whole population:\n");
-    print_array(members, POPULATION_SIZE);
-
-    printf("best [%f %f %f %f %f %f %f %f %f %f %f %f]\n",
-           op_vec.p, op_vec.cg, op_vec.c, op_vec.pp, op_vec.cgp, op_vec.cp,
-           op_vec.dt, op_vec.h, op_vec.k, op_vec.m, op_vec.n, op_vec.fitness);
-    return op_vec.fitness;
+    *result = op_vec;
+    return EVO_OK;
 }
 
 void *work_task(void *par)
@@ -490,18 +506,18 @@ void *work_task(void *par)
     member op_vec;
     long index = (long) par;
 
-    uint32_t range = 4*POPULATION_SIZE;
+    uint32_t range = POPULATION_SIZE;
     uint64_t state;
 
     for (i = 0; i < GENERATION_COUNT; i++)
     {
-        MWC64X_Seed(&state, range, 6803 * (i + 1));
+        MWC64X_Seed(&state, range, seed + 100 * i);
 
-        for (j = index; j < POPULATION_SIZE; j = j + T_COUNT)
+        for (j = index; j < POPULATION_SIZE; j = j + cpu_count)
         {
-            a = MWC64X_Next(&state, range) / 4;
-            b = MWC64X_Next(&state, range) / 4;
-            c = MWC64X_Next(&state, range) / 4;
+            a = MWC64X_Next(&state, range);
+            b = MWC64X_Next(&state, range);
+            c = MWC64X_Next(&state, range);
 
             diff(members + a, members + b, &op_vec); // -> diff vector
             mult(&op_vec, F, &op_vec);              // -> weighted diff vector
@@ -518,7 +534,7 @@ void *work_task(void *par)
         pthread_spin_lock(&spin);
         worker_counter++;
 
-        if (worker_counter >= T_COUNT)
+        if (worker_counter >= cpu_count)
         {
             memcpy((member *) members, (member *) members_new, sizeof(member) * POPULATION_SIZE);
             worker_counter = 0;
@@ -532,7 +548,7 @@ void *work_task(void *par)
     pthread_exit(NULL);
 }
 
-float evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metric_type)
+int evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metric_type, member *result)
 {
     int i;
     long k;
@@ -543,7 +559,21 @@ float evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int me
     db_values = values;
     db_size = num_values;
 
-    printf("** running pthread version with %d threads **\n", T_COUNT);
+    #ifdef _SC_NPROCESSORS_ONLN
+    cpu_count = sysconf(_SC_NPROCESSORS_ONLN);
+    if (cpu_count < 1)
+    {
+        fprintf(stderr, "Could not determine number of CPUs online:\n");
+        return 0.0f;
+    }
+    #else
+    fprintf(stderr, "Could not determine number of CPUs");
+    return 0.0f;
+    #endif
+
+    workers = (pthread_t *) malloc(cpu_count * sizeof(pthread_t));
+
+    printf("** running pthread version with %d threads **\n", cpu_count);
 
     switch (metric_type)
     {
@@ -560,7 +590,7 @@ float evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int me
         get_eval = evaluation_max;
         break;
     default:
-        return 0.0f;
+        return EVO_ERROR;
     }
 
     uint64_t state;
@@ -576,16 +606,17 @@ float evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int me
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 
+    seed = time(NULL);
     worker_counter = 0;
     pthread_spin_init(&spin, PTHREAD_PROCESS_PRIVATE);
-    pthread_barrier_init(&barrier, NULL, T_COUNT);
+    pthread_barrier_init(&barrier, NULL, cpu_count);
 
-    for (k = 0; k < T_COUNT; k++)
+    for (k = 0; k < cpu_count; k++)
     {
-        pthread_create(&workers[k], &attr, work_task, (void *) k);
+        pthread_create(workers + k, &attr, work_task, (void *) k);
     }
 
-    for (k = 0; k < T_COUNT; k++)
+    for (k = 0; k < cpu_count; k++)
     {
         pthread_join(workers[k], NULL);
     }
@@ -593,6 +624,7 @@ float evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int me
     pthread_attr_destroy(&attr);
     pthread_spin_destroy(&spin);
     pthread_barrier_destroy(&barrier);
+    free(workers);
 
     printf("\n\n");
 
@@ -607,21 +639,17 @@ float evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int me
         }
     }
 
-    printf("Whole population:\n");
-    print_array(members, POPULATION_SIZE);
-
-    printf("best [%f %f %f %f %f %f %f %f %f %f %f %f]\n",
-           op_vec.p, op_vec.cg, op_vec.c, op_vec.pp, op_vec.cgp, op_vec.cp,
-           op_vec.dt, op_vec.h, op_vec.k, op_vec.m, op_vec.n, op_vec.fitness);
-    return op_vec.fitness;
+    *result = op_vec;
+    return EVO_OK;
 }
 
-float evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metric_type)
+int evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metric_type, member *result)
 {
-    int i, j;
-    int a, b, c;
+    int i;
     member op_vec;
     float min_fit;
+
+    memset((void *) &op_vec, 0, sizeof(member));
 
     uint64_t state;
     uint32_t range = 12*POPULATION_SIZE;
@@ -631,50 +659,20 @@ float evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int met
     MWC64X_Seed(&state, range, time(NULL));
     init_population(members, bconf, &state, range);
 
-    init_opencl(num_values, values, POPULATION_SIZE, metric_type);
-
-    MWC64X_Seed(&state, range, time(NULL));
-    init_population(members, bconf, &state, range);
+    if (cl_init(num_values, values, POPULATION_SIZE, members, metric_type) == 1)
+        return EVO_ERROR;
 
     for (i = 0; i < GENERATION_COUNT; i++)
     {
-        min_fit = FLT_MAX;
+        // spočítej přes opencl fitness pro každého člena v members
+        cl_compute_fitness(time(NULL));
 
-        range = 4*POPULATION_SIZE;
-        MWC64X_Seed(&state, range, time(NULL));
-
-        // nageneruje nové kandidáty populace
-        for (j = 0; j < POPULATION_SIZE; j++)
-        {
-            a = MWC64X_Next(&state, range) / 4;
-            b = MWC64X_Next(&state, range) / 4;
-            c = MWC64X_Next(&state, range) / 4;
-
-            diff(members + a, members + b, &op_vec); // -> diff vector
-            mult(&op_vec, F, &op_vec);              // -> weighted diff vector
-            add(members + c, &op_vec, &op_vec);     // -> noise vector
-
-            cross_m(&op_vec, members + j, &op_vec, &state, range);
-
-            memcpy(members_new + j, &op_vec, sizeof(member));
-        }
-        // spočítej přes opencl fitness pro každého člena v members_new
-        cl_compute_fitness(members_new);
-
-        // nahraď v members lepší členy z members_new
-        for (j = 0; j < POPULATION_SIZE; j++)
-        {
-            if (fabs(members_new[j].fitness) < fabs(members[j].fitness))
-                members[j] = members_new[j];
-            min_fit = fminf(fabs(members[j].fitness), fabs(min_fit));
-        }
-
-        //printf("%.5f\n", min_fit);
         print_progress(100*((float) i / GENERATION_COUNT));
     }
 
     printf("\n\n");
 
+    cl_read_result(members);
     cl_cleanup();
 
     min_fit = FLT_MAX;
@@ -687,11 +685,6 @@ float evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int met
         }
     }
 
-    printf("Whole population:\n");
-    print_array(members, POPULATION_SIZE);
-
-    printf("best was [%f %f %f %f %f %f %f %f %f %f %f %f]\n",
-           op_vec.p, op_vec.cg, op_vec.c, op_vec.pp, op_vec.cgp, op_vec.cp,
-           op_vec.dt, op_vec.h, op_vec.k, op_vec.m, op_vec.n, op_vec.fitness);
-    return op_vec.fitness;
+    *result = op_vec;
+    return EVO_OK;
 }

@@ -30,18 +30,19 @@ typedef struct
 
 typedef struct
 {
-    float p;
-    float cg;
-    float c;
-    float pp;
-    float cgp;
-    float cp;
-    float dt;
-    float h;
-    float k;
-    float m;
-    float n;
-    float fitness;
+    float p;   // s0
+    float cg;  // s1
+    float c;   // s2
+    float pp;  // s3
+    float cgp; // s4
+    float cp;  // s5
+    float dt;  // s6
+    float h;   // s7
+    float k;   // s8
+    float m;   // s9
+    float n;   // sa
+    float fitness; // sb
+    float reserved[4];
 } member;
 
 typedef struct

@@ -14,7 +14,9 @@ opencl_target.h
 
 #include "structures.h"
 
-int init_opencl(int num_values, mvalue_ptr *values, int size_members, int metric_type);
-void cl_compute_fitness(member *members);
+int  cl_init(int num_values, mvalue_ptr *values, int num_members, member *members, int metric_type);
+void cl_compute_fitness(long seed);
+void cl_read_result(member *res);
+void cl_cleanup();
 
 #endif // OPENCL_TARGET_H_INCLUDED

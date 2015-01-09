@@ -51,11 +51,14 @@ void swap(mvalue_ptr *array, int i, int j)
 
 int main(int argc, char **argv)
 {
+    int i;
     int rc = 0;
     int db_size = 0;
     mvalue_ptr *db_values = NULL;
     bounds bconf;
+    member result;
     int metrics[3] = {METRIC_ABS, METRIC_SQ, METRIC_MAX};
+    char *metrics_name[3] = {"absolute", "square", "maximum"};
 
     if (argc < 3)
     {
@@ -96,18 +99,28 @@ int main(int argc, char **argv)
 
     // nakonec vypsat statistiky
 
-/*
     printf("Velikost populace: %d\n", POPULATION_SIZE);
     printf("Počet generací: %d\n", GENERATION_COUNT);
     printf("Mutační konstanta: %f\n", F);
     printf("Práh křížení: %f\n", CR);
-*/
 
-    //evolution_serial(db_size, db_values, bconf, METRIC_ABS);
-//    for (i = 0; i < 3; i++)
-//    {
-        evolution_pthread(db_size, db_values, bconf, metrics[0]);
-//    }
+    evolution_serial(db_size, db_values, bconf, METRIC_ABS, &result);
+    for (i = 0; i < 3; i++)
+    {
+        // start stopwatch
+        evolution_pthread(db_size, db_values, bconf, metrics[0], &result);
+        // stop stopwatch
+        printf("pthread %s metric with best [%f %f %f %f %f %f %f %f %f %f %f %f]\n", metrics_name[0],
+           result.p, result.cg, result.c, result.pp, result.cgp, result.cp,
+           result.dt, result.h, result.k, result.m, result.n, result.fitness);
+
+        // start stopwatch
+        evolution_opencl(db_size, db_values, bconf, metrics[i], &result);
+        // stop stopwatch
+        printf("OpenCL %s metric with best [%f %f %f %f %f %f %f %f %f %f %f %f]\n", metrics_name[i],
+           result.p, result.cg, result.c, result.pp, result.cgp, result.cp,
+           result.dt, result.h, result.k, result.m, result.n, result.fitness);
+    }
 
     // exit and clean up
     free_array(db_values, db_size);

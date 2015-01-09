@@ -9,6 +9,9 @@ evo.h
 #ifndef EVO_H_INCLUDED
 #define EVO_H_INCLUDED
 
+#define EVO_ERROR -1
+#define EVO_OK 0
+
 #include "structures.h"
 
 #define GENERATION_COUNT 500
@@ -17,9 +20,9 @@ evo.h
 
 #define PENALTY 10000.0f
 
-float evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metric_type);
-float evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metric_type);
-float evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metric_type);
+int evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metric_type, member *result);
+int evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metric_type, member *result);
+int evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metric_type, member *result);
 
 void cl_cleanup();
 

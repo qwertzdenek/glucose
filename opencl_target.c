@@ -25,6 +25,7 @@ cl_device_id *devices;
 cl_context context;
 cl_command_queue command_queue;
 cl_program program;
+cl_kernel kernel_population;
 cl_kernel kernel_equation;
 cl_kernel kernel_avg;
 
@@ -32,8 +33,8 @@ cl_mem buf_seg_vals;
 cl_mem buf_lenghts;
 
 cl_mem buf_seg_vals_res; // (segmenty) * (max) * (populace) -> float
-cl_mem buf_res; // (segmenty) * (populace) -> float
 cl_mem buf_members; // (populace) -> member
+cl_mem buf_members_new; // (populace) -> member
 
 size_t three_dim[3] = {0, 0, 0};
 size_t one_dim[1] = {0};
@@ -95,7 +96,7 @@ static char* read_source_file(const char *filename)
     return src;
 }
 
-int init_opencl(int num_values, mvalue_ptr *values, int size_members, int metric_type)
+int cl_init(int num_values, mvalue_ptr *values, int num_members, member *members, int metric_type)
 {
     int i, j;
     char string_one[128];
@@ -106,7 +107,7 @@ int init_opencl(int num_values, mvalue_ptr *values, int size_members, int metric
 
     const char *source = NULL;
 
-    population = size_members;
+    population = num_members;
     segments = num_values;
     act_metric = metric_type;
 
@@ -155,7 +156,7 @@ int init_opencl(int num_values, mvalue_ptr *values, int size_members, int metric
 //        puts("platform number: ");
 //        fgets((char *) string, 7, stdin);
 //        i = strtol(string, NULL, 10);
-i = 0;
+        i = 0;
     }
     while (i >= platformCount);
 
@@ -171,7 +172,7 @@ i = 0;
 //        puts("device number: ");
 //        fgets((char *) string, 7, stdin);
 //        j = strtol(string, NULL, 10);
-j = 0;
+        j = 0;
     }
     while (j >= deviceCount);
 
@@ -217,9 +218,23 @@ j = 0;
 
     program = clCreateProgramWithSource(context, 1, &source, 0, &err);
 
-    if (clBuildProgram(program, 0, NULL, NULL, NULL, NULL) != CL_SUCCESS)
+    err = clBuildProgram(program, 0, NULL, "-I.", NULL, NULL);
+
+    if (err != CL_SUCCESS)
     {
-        printf("Error building program\n");
+        // Determine the size of the log
+        size_t log_size;
+        clGetProgramBuildInfo(program, devices[device_index], CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
+
+        // Allocate memory for the log
+        char *log = (char *) malloc(log_size);
+
+        // Get the log
+        clGetProgramBuildInfo(program, devices[device_index], CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
+
+        // Print the log
+        printf("%s\n", log);
+        free(log);
         clReleaseCommandQueue(command_queue);
         clReleaseContext(context);
         free(devices);
@@ -228,6 +243,7 @@ j = 0;
     }
 
     // specify which kernel from the program to execute
+    kernel_population = clCreateKernel(program, "kernel_population", &err);
     kernel_equation = clCreateKernel(program, "solve_equation", &err);
     kernel_avg = clCreateKernel(program, "solve_avg", &err);
 
@@ -235,20 +251,23 @@ j = 0;
 
     buf_seg_vals = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(mvalue) * max_seg_vals * segments, seg_vals, NULL);
     buf_lenghts = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(int) * segments, lenghts, NULL);
+    buf_members = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_float16) * population, members, NULL);
+    buf_members_new = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_float16) * population, members, NULL);
 
     buf_seg_vals_res = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(float) * max_seg_vals * segments * population, NULL, NULL);
-    buf_res = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * population, NULL, NULL);
-    buf_members = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(member) * population, NULL, NULL);
 
     free(seg_vals);
     free(lenghts);
 
     // set the argument list for the kernel command
+    clSetKernelArg(kernel_population, 0, sizeof(cl_mem), &buf_members);
+    clSetKernelArg(kernel_population, 1, sizeof(cl_mem), &buf_members_new);
+
     clSetKernelArg(kernel_equation, 0, sizeof(int), &segments);
     clSetKernelArg(kernel_equation, 1, sizeof(cl_mem), &buf_seg_vals);
     clSetKernelArg(kernel_equation, 2, sizeof(cl_mem), &buf_lenghts);
     clSetKernelArg(kernel_equation, 3, sizeof(int), &population);
-    clSetKernelArg(kernel_equation, 4, sizeof(cl_mem), &buf_members);
+    clSetKernelArg(kernel_equation, 4, sizeof(cl_mem), &buf_members_new);
     clSetKernelArg(kernel_equation, 5, sizeof(cl_mem), &buf_seg_vals_res);
     clSetKernelArg(kernel_equation, 6, sizeof(char), &act_metric);
 
@@ -256,8 +275,9 @@ j = 0;
     clSetKernelArg(kernel_avg, 1, sizeof(int), &segments);
     clSetKernelArg(kernel_avg, 2, sizeof(cl_mem), &buf_seg_vals_res);
     clSetKernelArg(kernel_avg, 3, sizeof(cl_mem), &buf_lenghts);
-    clSetKernelArg(kernel_avg, 4, sizeof(cl_mem), &buf_res);
-    clSetKernelArg(kernel_avg, 5, sizeof(char), &act_metric);
+    clSetKernelArg(kernel_avg, 4, sizeof(cl_mem), &buf_members);
+    clSetKernelArg(kernel_avg, 5, sizeof(cl_mem), &buf_members_new);
+    clSetKernelArg(kernel_avg, 6, sizeof(char), &act_metric);
 
     three_dim[0] = max_seg_vals;
     three_dim[1] = segments;
@@ -265,50 +285,21 @@ j = 0;
 
     one_dim[0] = population;
 
-    // results from the solve_avg kernel
-    res_avg = (float *) malloc(sizeof(float) * segments * population);
-
     return 0;
 }
 
-float avg(int num_array, float *array)
+void cl_compute_fitness(long seed)
 {
-    float average = 0;
-    int i;
-    for (i = 0; i < num_array; i++)
-    {
-        average += array[i];
-    }
-    return average / num_array;
-}
-
-float max(int num_array, float *array)
-{
-    float maximum = FLT_MIN;
-    int i;
-    for (i = 0; i < num_array; i++)
-    {
-        maximum = fmaxf(maximum, array[i]);
-    }
-    return maximum;
-}
-
-void cl_compute_fitness(member *members)
-{
-    int i;
-
-    clEnqueueWriteBuffer(command_queue, buf_members, CL_TRUE, 0, sizeof(member) * population, members, 0, NULL, NULL);
-
+    clSetKernelArg(kernel_population, 2, sizeof(uint), &seed);
+    clEnqueueNDRangeKernel(command_queue, kernel_population, 1, NULL, one_dim, NULL, 0, NULL, NULL);
     clEnqueueNDRangeKernel(command_queue, kernel_equation, 3, NULL, three_dim, NULL, 0, NULL, NULL);
     clEnqueueNDRangeKernel(command_queue, kernel_avg, 1, NULL, one_dim, NULL, 0, NULL, NULL);
-
     clFinish(command_queue);
-    clEnqueueReadBuffer(command_queue, buf_res, CL_TRUE, 0, sizeof(float) * population, res_avg, 0, NULL, NULL);
+}
 
-    for (i = 0; i < population; i++)
-    {
-        members[i].fitness = res_avg[i];
-    }
+void cl_read_result(member *res)
+{
+    clEnqueueReadBuffer(command_queue, buf_members, CL_TRUE, 0, sizeof(cl_float16) * population, res, 0, NULL, NULL);
 }
 
 void cl_cleanup()
@@ -317,16 +308,16 @@ void cl_cleanup()
     clReleaseMemObject(buf_seg_vals);
     clReleaseMemObject(buf_seg_vals_res);
     clReleaseMemObject(buf_lenghts);
-    clReleaseMemObject(buf_res);
     clReleaseMemObject(buf_members);
+    clReleaseMemObject(buf_members_new);
     clReleaseProgram(program);
+    clReleaseKernel(kernel_population);
     clReleaseKernel(kernel_equation);
     clReleaseKernel(kernel_avg);
     clReleaseCommandQueue(command_queue);
     clReleaseContext(context);
 
     // clean host memory
-    free(res_avg);
     free(devices);
     free(platforms);
 }
