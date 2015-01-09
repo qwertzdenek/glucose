@@ -659,7 +659,7 @@ int evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metri
     MWC64X_Seed(&state, range, time(NULL));
     init_population(members, bconf, &state, range);
 
-    if (cl_init(num_values, values, POPULATION_SIZE, members, metric_type) == 1)
+    if (cl_init(num_values, values, POPULATION_SIZE, members, metric_type) == OPENCL_ERROR)
         return EVO_ERROR;
 
     for (i = 0; i < GENERATION_COUNT; i++)

@@ -108,9 +108,9 @@ int main(int argc, char **argv)
     for (i = 0; i < 3; i++)
     {
         // start stopwatch
-        evolution_pthread(db_size, db_values, bconf, metrics[0], &result);
+        evolution_pthread(db_size, db_values, bconf, metrics[i], &result);
         // stop stopwatch
-        printf("pthread %s metric with best [%f %f %f %f %f %f %f %f %f %f %f %f]\n", metrics_name[0],
+        printf("pthread %s metric with best [%f %f %f %f %f %f %f %f %f %f %f %f]\n", metrics_name[i],
            result.p, result.cg, result.c, result.pp, result.cgp, result.cp,
            result.dt, result.h, result.k, result.m, result.n, result.fitness);
 

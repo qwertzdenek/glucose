@@ -153,10 +153,9 @@ int cl_init(int num_values, mvalue_ptr *values, int num_members, member *members
     // ASK user
     do
     {
-//        puts("platform number: ");
-//        fgets((char *) string, 7, stdin);
-//        i = strtol(string, NULL, 10);
-        i = 0;
+        puts("platform number: ");
+        fgets((char *) string, 7, stdin);
+        i = strtol(string, NULL, 10);
     }
     while (i >= platformCount);
 
@@ -169,10 +168,9 @@ int cl_init(int num_values, mvalue_ptr *values, int num_members, member *members
 
     do
     {
-//        puts("device number: ");
-//        fgets((char *) string, 7, stdin);
-//        j = strtol(string, NULL, 10);
-        j = 0;
+        puts("device number: ");
+        fgets((char *) string, 7, stdin);
+        j = strtol(string, NULL, 10);
     }
     while (j >= deviceCount);
 
@@ -218,7 +216,7 @@ int cl_init(int num_values, mvalue_ptr *values, int num_members, member *members
 
     program = clCreateProgramWithSource(context, 1, &source, 0, &err);
 
-    err = clBuildProgram(program, 0, NULL, "-I.", NULL, NULL);
+    err = clBuildProgram(program, 1, devices + device_index, "-I.", NULL, NULL);
 
     if (err != CL_SUCCESS)
     {
