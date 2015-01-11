@@ -453,7 +453,7 @@ int evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metri
     // initialize new generation buffer
     memcpy((member *) members_new, (member *) members, sizeof(member) * POPULATION_SIZE);
 
-    for (i = 0; i < GENERATION_COUNT; i++)
+    for (i = 0; i < num_generations; i++)
     {
         range = POPULATION_SIZE;
         MWC64X_Seed(&state, range, time(NULL));
@@ -477,7 +477,9 @@ int evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metri
                 memcpy(members_new + j, &op_vec, sizeof(member));
         }
 
-        print_progress(100*((float) i / GENERATION_COUNT));
+        #ifdef _VERBOSE
+        print_progress(100*((float) i / num_generations));
+        #endif // _VERBOSE
 
         memcpy((member *) members, (member *) members_new, sizeof(member) * POPULATION_SIZE);
     }
@@ -509,7 +511,7 @@ void *work_task(void *par)
     uint32_t range = POPULATION_SIZE;
     uint64_t state;
 
-    for (i = 0; i < GENERATION_COUNT; i++)
+    for (i = 0; i < num_generations; i++)
     {
         MWC64X_Seed(&state, range, seed + 100 * i);
 
@@ -538,7 +540,9 @@ void *work_task(void *par)
         {
             memcpy((member *) members, (member *) members_new, sizeof(member) * POPULATION_SIZE);
             worker_counter = 0;
-            print_progress(100*((float) i / GENERATION_COUNT));
+            #ifdef _VERBOSE
+            print_progress(100*((float) i / num_generations));
+            #endif // _VERBOSE
         }
         pthread_spin_unlock(&spin);
 
@@ -662,12 +666,14 @@ int evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metri
     if (cl_init(num_values, values, POPULATION_SIZE, members, metric_type) == OPENCL_ERROR)
         return EVO_ERROR;
 
-    for (i = 0; i < GENERATION_COUNT; i++)
+    for (i = 0; i < num_generations; i++)
     {
         // spočítej přes opencl fitness pro každého člena v members
         cl_compute_fitness(time(NULL));
 
-        print_progress(100*((float) i / GENERATION_COUNT));
+        #ifdef _VERBOSE
+        print_progress(100*((float) i / num_generations));
+        #endif // _VERBOSE
     }
 
     printf("\n\n");

@@ -14,11 +14,12 @@ evo.h
 
 #include "structures.h"
 
-#define GENERATION_COUNT 500
 #define F 0.45 // mutation constant
 #define CR 0.4 // threshold
 
 #define PENALTY 10000.0f
+
+extern int num_generations; // generation count
 
 int evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metric_type, member *result);
 int evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metric_type, member *result);

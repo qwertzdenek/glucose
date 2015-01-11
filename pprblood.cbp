@@ -11,9 +11,10 @@
 				<Option object_output="obj/Debug/" />
 				<Option type="1" />
 				<Option compiler="opencl_compiler" />
-				<Option parameters="data.sqlite3 config.ini" />
+				<Option parameters="data.sqlite3 config.ini -s 500 -a" />
 				<Compiler>
 					<Add option="-g" />
+					<Add option="-D_VERBOSE" />
 				</Compiler>
 			</Target>
 			<Target title="Release">
@@ -21,7 +22,7 @@
 				<Option object_output="obj/Release/" />
 				<Option type="1" />
 				<Option compiler="opencl_compiler" />
-				<Option parameters="data.sqlite3 config.ini" />
+				<Option parameters="data.sqlite3 config.ini -s 500 -s" />
 				<Compiler>
 					<Add option="-O2" />
 				</Compiler>
