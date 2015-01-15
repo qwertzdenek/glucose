@@ -13,7 +13,11 @@ database.c
 #include <string.h>
 #include <time.h>
 
+#ifdef __MINGWW32__
 #include "sqlite3.h"
+#else
+#include <sqlite3.h>
+#endif
 #include "database.h"
 
 mvalue_ptr *db_private;
@@ -26,11 +30,11 @@ mvalue_ptr *db_private;
  * return time in double
  */
 double iso2double(const char *time) {
-    int year, month, date, hour, minute, seconds;
     struct tm tm;
     memset(&tm, 0, sizeof(struct tm));
 
     #ifdef __MINGW32__
+    int year, month, date, hour, minute, seconds;
     sscanf(time, "%d-%d-%dT%d:%d:%d", &year, &month, &date, &hour, &minute, &seconds);
 	tm.tm_year = year - 1900;
 	tm.tm_mon = month - 1;

@@ -1,13 +1,18 @@
-CLPATH=/opt/intel/opencl-sdk
+CLPATH=/opt/AMDAPP/SDK
 CC=gcc
 CFLAGS=-Wall -O2 -I$(CLPATH)/include -D_VERBOSE
-LDFLAGS=-lm -pthread -lOpenCL
+LDFLAGS=-lm -lsqlite3 -pthread -lOpenCL
 SOURCES=approx.c database.c evo.c load_ini.c main.c mwc64x_rng.c opencl_target.c
 EXECUTABLE=glucose
 
-all:
-	$(CC) $(CFLAGS) $(SOURCES) -o $(EXECUTABLE) $(LDFLAGS) 
+all: $(Release)
+
+Release:
+	$(CC) $(CFLAGS) $(SOURCES) -o $(EXECUTABLE) $(LDFLAGS)
 	strip $(EXECUTABLE)
+Debug:
+	$(CC) -g $(CFLAGS) $(SOURCES) -o $(EXECUTABLE) $(LDFLAGS)
 
 clean:
-	rm glucose
+	rm $(EXECUTABLE)
+

@@ -584,7 +584,9 @@ int evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metr
     db_size = num_values;
 
     #ifdef _SC_NPROCESSORS_ONLN
+    #ifdef __MINGW32__
     GetSystemInfo(&info);
+    #endif // __MINGW32__
     cpu_count = sysconf(_SC_NPROCESSORS_ONLN);
     if (cpu_count < 1)
     {
@@ -597,7 +599,7 @@ int evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metr
     #endif
 
     #ifdef _VERBOSE
-    printf("ptreads: %d threads\n", cpu_count);
+    printf("Threads: %d\n", cpu_count);
     #endif // _VERBOSE
 
     workers = (pthread_t *) malloc(cpu_count * sizeof(pthread_t));

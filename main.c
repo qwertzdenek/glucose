@@ -169,7 +169,7 @@ int main(int argc, char **argv)
         printf("Cross threshold CR: %.2f\n", CR);
 
         err = evolution(db_size, db_values, bconf, metrics[metric], &r, &took);
-        
+
         if (err == EVO_OK)
         {
             printf("Finished %s %s metric with fitness %.4f.\n", methods[method], metrics_name[metric], r.fitness);
