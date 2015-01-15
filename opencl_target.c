@@ -99,9 +99,11 @@ static char* read_source_file(const char *filename)
 int cl_init(int num_values, mvalue_ptr *values, int num_members, member *members, int metric_type)
 {
     int i, j;
+    #ifdef _VERBOSE
     char string_one[128];
     char string_two[128];
     char string[256];
+    #endif // _VERBOSE
     int platform_index = 0;
     int device_index = 0;
 
@@ -122,6 +124,7 @@ int cl_init(int num_values, mvalue_ptr *values, int num_members, member *members
     platforms = (cl_platform_id *) malloc(sizeof(cl_platform_id) * platformCount);
     clGetPlatformIDs(platformCount, platforms, NULL);
 
+    #ifdef _VERBOSE
     for (i = 0; i < platformCount; i++)
     {
         printf("platform %d\n", i);
@@ -143,6 +146,7 @@ int cl_init(int num_values, mvalue_ptr *values, int num_members, member *members
 
         free(devices);
     }
+    #endif // _VERBOSE
 
     if (platformCount == 0)
     {
@@ -153,9 +157,13 @@ int cl_init(int num_values, mvalue_ptr *values, int num_members, member *members
     // ASK user
     do
     {
+        #ifdef _VERBOSE
         puts("platform number: ");
         fgets((char *) string, 7, stdin);
         i = strtol(string, NULL, 10);
+        #else
+        i = 0;
+        #endif
     }
     while (i >= platformCount);
 
@@ -168,9 +176,13 @@ int cl_init(int num_values, mvalue_ptr *values, int num_members, member *members
 
     do
     {
+        #ifdef _VERBOSE
         puts("device number: ");
         fgets((char *) string, 7, stdin);
         j = strtol(string, NULL, 10);
+        #else
+        j = 0;
+        #endif
     }
     while (j >= deviceCount);
 

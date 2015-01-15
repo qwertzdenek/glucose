@@ -410,16 +410,16 @@ void fitness(member *m)
 
 /**
  * Serial version of differencial evolution
- * param num_values size of the database
- * param values
  */
-int evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metric_type, member *result)
+int evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metric_type, member *result, double *time_used)
 {
     int i, j;
     int a, b, c;
     float new_fit;
     member op_vec;
     float min_fit;
+    struct timespec start;
+    struct timespec end;
 
     db_values = values;
     db_size = num_values;
@@ -445,13 +445,13 @@ int evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metri
     uint64_t state;
     uint32_t range = 12*POPULATION_SIZE;
 
-    printf("** running serial version **\n");
-
     MWC64X_Seed(&state, range, time(NULL));
     init_population(members, bconf, &state, range);
 
     // initialize new generation buffer
     memcpy((member *) members_new, (member *) members, sizeof(member) * POPULATION_SIZE);
+
+    clock_gettime(CLOCK_REALTIME, &start); // get initial time-stamp
 
     for (i = 0; i < num_generations; i++)
     {
@@ -484,7 +484,14 @@ int evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metri
         memcpy((member *) members, (member *) members_new, sizeof(member) * POPULATION_SIZE);
     }
 
+    clock_gettime(CLOCK_REALTIME, &end);   // get final time-stamp
+
+    *time_used = (double)(end.tv_sec - start.tv_sec) +
+                  (double)(end.tv_nsec - start.tv_nsec) * 1.0e-9;
+
+    #ifdef _VERBOSE
     printf("\n\n");
+    #endif // _VERBOSE
 
     min_fit = FLT_MAX;
     for (i = 0; i < POPULATION_SIZE; i++)
@@ -513,7 +520,7 @@ void *work_task(void *par)
 
     for (i = 0; i < num_generations; i++)
     {
-        MWC64X_Seed(&state, range, seed + 100 * i);
+        MWC64X_Seed(&state, range, seed + 10 * index +  2 * i);
 
         for (j = index; j < POPULATION_SIZE; j = j + cpu_count)
         {
@@ -552,13 +559,18 @@ void *work_task(void *par)
     pthread_exit(NULL);
 }
 
-int evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metric_type, member *result)
+/**
+ * Pthread version of differencial evolution
+ */
+int evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metric_type, member *result, double *time_used)
 {
     int i;
     long k;
     float min_fit;
     pthread_attr_t attr;
     member op_vec;
+    struct timespec start;
+    struct timespec end;
 
     db_values = values;
     db_size = num_values;
@@ -575,9 +587,11 @@ int evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metr
     return 0.0f;
     #endif
 
-    workers = (pthread_t *) malloc(cpu_count * sizeof(pthread_t));
+    #ifdef _VERBOSE
+    printf("ptreads: %d threads\n", cpu_count);
+    #endif // _VERBOSE
 
-    printf("** running pthread version with %d threads **\n", cpu_count);
+    workers = (pthread_t *) malloc(cpu_count * sizeof(pthread_t));
 
     switch (metric_type)
     {
@@ -615,6 +629,8 @@ int evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metr
     pthread_spin_init(&spin, PTHREAD_PROCESS_PRIVATE);
     pthread_barrier_init(&barrier, NULL, cpu_count);
 
+    clock_gettime(CLOCK_REALTIME, &start); // get initial time-stamp
+
     for (k = 0; k < cpu_count; k++)
     {
         pthread_create(workers + k, &attr, work_task, (void *) k);
@@ -625,12 +641,19 @@ int evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metr
         pthread_join(workers[k], NULL);
     }
 
+    clock_gettime(CLOCK_REALTIME, &end);   // get final time-stamp
+
+    *time_used = (double)(end.tv_sec - start.tv_sec) +
+                  (double)(end.tv_nsec - start.tv_nsec) * 1.0e-9;
+
     pthread_attr_destroy(&attr);
     pthread_spin_destroy(&spin);
     pthread_barrier_destroy(&barrier);
     free(workers);
 
+    #ifdef _VERBOSE
     printf("\n\n");
+    #endif // _VERBOSE
 
     memset(&op_vec, 0, sizeof(member));
     min_fit = FLT_MAX;
@@ -647,24 +670,26 @@ int evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metr
     return EVO_OK;
 }
 
-int evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metric_type, member *result)
+int evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metric_type, member *result, double *time_used)
 {
     int i;
     member op_vec;
     float min_fit;
+    struct timespec start;
+    struct timespec end;
 
     memset((void *) &op_vec, 0, sizeof(member));
 
     uint64_t state;
     uint32_t range = 12*POPULATION_SIZE;
 
-    printf("** running OpenCL version **\n");
-
     MWC64X_Seed(&state, range, time(NULL));
     init_population(members, bconf, &state, range);
 
     if (cl_init(num_values, values, POPULATION_SIZE, members, metric_type) == OPENCL_ERROR)
         return EVO_ERROR;
+
+    clock_gettime(CLOCK_REALTIME, &start); // get initial time-stamp
 
     for (i = 0; i < num_generations; i++)
     {
@@ -676,7 +701,14 @@ int evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metri
         #endif // _VERBOSE
     }
 
+    clock_gettime(CLOCK_REALTIME, &end);   // get final time-stamp
+
+    *time_used = (double)(end.tv_sec - start.tv_sec) +
+                  (double)(end.tv_nsec - start.tv_nsec) * 1.0e-9;
+
+    #ifdef _VERBOSE
     printf("\n\n");
+    #endif // _VERBOSE
 
     cl_read_result(members);
     cl_cleanup();

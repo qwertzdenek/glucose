@@ -55,7 +55,7 @@ __kernel void kernel_population(__global float16 *members, __global float16 *mem
     const int c = MWC64X_NextUint(&state, range);
 
     nm = members[a] - members[b]; // -> diff vector
-    nm *= F;          // -> weighted diff vector
+    nm *= (float) F;          // -> weighted diff vector
     nm += members[c]; // -> noise vector
 
     nm.s0 = MWC64X_NextUint(&state, range) < thresh ? nm.s0 : members[idx].s0;

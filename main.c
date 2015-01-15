@@ -9,8 +9,6 @@ main.c
 #include <stdio.h>
 #include <stdlib.h>
 #include <locale.h>
-#include <math.h>
-#include <float.h>
 #include <string.h>
 
 #include "database.h"
@@ -22,7 +20,7 @@ int num_generations;
 
 int metrics[3] = {METRIC_ABS, METRIC_SQ, METRIC_MAX};
 char *metrics_name[3] = {"absolute", "square", "maximum"};
-char *methods[3] = {"Serial", "Pthread", "OpenCL"};
+char *methods[3] = {"serial", "pthread", "OpenCL"};
 
 char *help = "Glucose transportation simulation && Zdeněk Janeček 2015\n"\
 "use: glucose DATABASE CONFIG METHOD GENERATIONS METRIC\n"\
@@ -73,15 +71,17 @@ int main(int argc, char **argv)
 {
     int metric;
     int method;
-    int rc = 0;
+    int csv = 0;
     int db_size = 0;
     FILE *f;
     mvalue_ptr *db_values = NULL;
     bounds bconf;
-    member result;
-    int (*evolution) (int num_values, mvalue_ptr *values, bounds bconf, int metric_type, member *result);
+    member r;
+    int (*evolution) (int num_values, mvalue_ptr *values, bounds bconf, int metric_type, member *r, double *time_used);
+    double took;
+    int err;
 
-    if (strcmp("-h", argv[1]) == 0 || argc < 6)
+    if (argc < 6 || strcmp("-h", argv[1]) == 0)
     {
         printf(help);
         return 0;
@@ -146,23 +146,38 @@ int main(int argc, char **argv)
 
     load_ini(argv[2], &bconf);
 
-    rc = init_data(argv[1], &db_values, &db_size);
-    if (rc == 0)
-        printf("database loaded\n");
-    else
+    if (init_data(argv[1], &db_values, &db_size))
         return -1;
+
+    if (argc == 7 && strcmp("-csv", argv[6]) == 0)
+        csv = 1;
 
     filter(db_values, db_size);
 
-    printf("Velikost populace: %d\n", POPULATION_SIZE);
-    printf("Počet generací: %d\n", num_generations);
-    printf("Mutační konstanta: %.2f\n", F);
-    printf("Práh křížení: %.2f\n", CR);
+    if (csv)
+    {
+        err = evolution(db_size, db_values, bconf, metrics[metric], &r, &took);
+        if (err == EVO_OK)
+            printf("%s;%s;%.4f;%.6f;%d;%d\n", methods[method], metrics_name[metric], took, r.fitness, num_generations, POPULATION_SIZE);
+    }
+    else
+    {
+        printf("** running %s version **\n", methods[method]);
+        printf("Population size: %d\n", POPULATION_SIZE);
+        printf("Generation count: %d\n", num_generations);
+        printf("Mutation constant F: %.2f\n", F);
+        printf("Cross threshold CR: %.2f\n", CR);
 
-    evolution(db_size, db_values, bconf, metrics[metric], &result);
-    printf("%s %s metric with fitness %f\n[%f %f %f %f %f %f %f %f %f %f %f]\n", methods[method], metrics_name[metric],
-           result.fitness, result.p, result.cg, result.c, result.pp, result.cgp, result.cp,
-           result.dt, result.h, result.k, result.m, result.n);
+        err = evolution(db_size, db_values, bconf, metrics[metric], &r, &took);
+        
+        if (err == EVO_OK)
+        {
+            printf("Finished %s %s metric with fitness %.4f.\n", methods[method], metrics_name[metric], r.fitness);
+            printf("Operation took %.2f seconds.\n", took);
+            printf("Found parametres:\np=%f\ncg=%f\nc=%f\npp=%f\ncgp=%f\ncp=%f\ndt=%f\nh=%f\nk=%f\nm=%f\nn=%f\n",
+                  r.p,  r.cg,  r.c,  r.pp,  r.cgp,  r.cp,  r.dt,  r.h,  r.k,  r.m,  r.n);
+        }
+    }
 
     // exit and clean up
     free_array(db_values, db_size);

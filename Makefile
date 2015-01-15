@@ -1,5 +1,6 @@
+CLPATH=/opt/intel/opencl-sdk
 CC=gcc
-CFLAGS=-Wall -O2 -I/opt/AMDAPP/SDK/include
+CFLAGS=-Wall -O2 -I$(CLPATH)/include -D_VERBOSE
 LDFLAGS=-lm -lsqlite3 -pthread -lOpenCL
 SOURCES=approx.c database.c evo.c load_ini.c main.c mwc64x_rng.c opencl_target.c
 EXECUTABLE=glucose

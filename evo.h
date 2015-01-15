@@ -21,9 +21,9 @@ evo.h
 
 extern int num_generations; // generation count
 
-int evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metric_type, member *result);
-int evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metric_type, member *result);
-int evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metric_type, member *result);
+int evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metric_type, member *result, double *time_used);
+int evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metric_type, member *result, double *time_used);
+int evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metric_type, member *result, double *time_used);
 
 void cl_cleanup();
 
