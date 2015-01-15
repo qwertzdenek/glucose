@@ -409,6 +409,12 @@ void fitness(member *m)
 
 /**
  * Serial version of differencial evolution
+ * param num_values length of values array
+ * param values stored measured data
+ * param bconf bounds of initial members
+ * param metric_type metric type
+ * param result best member from the evolution
+ * param time_used evoution time
  */
 int evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metric_type, member *result, double *time_used)
 {
@@ -567,6 +573,12 @@ void *work_task(void *par)
 
 /**
  * Pthread version of differencial evolution
+ * param num_values length of values array
+ * param values stored measured data
+ * param bconf bounds of initial members
+ * param metric_type metric type
+ * param result best member from the evolution
+ * param time_used evoution time
  */
 int evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metric_type, member *result, double *time_used)
 {
@@ -685,6 +697,15 @@ int evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metr
     return EVO_OK;
 }
 
+/**
+ * OpenCL version of differencial evolution
+ * param num_values length of values array
+ * param values stored measured data
+ * param bconf bounds of initial members
+ * param metric_type metric type
+ * param result best member from the evolution
+ * param time_used evoution time
+ */
 int evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metric_type, member *result, double *time_used)
 {
     int i;

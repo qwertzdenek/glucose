@@ -123,6 +123,9 @@ int read_bounds(FILE *fp, bounds *bconf)
     return 0;
 }
 
+/**
+ * loads file to bconf
+ */
 int load_ini(char *file, bounds *bconf)
 {
     char buf[12];

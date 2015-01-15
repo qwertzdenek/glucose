@@ -46,6 +46,9 @@ int act_metric;
 
 float *res_avg; // results from the GPU (population size)
 
+/**
+ * Reads CL file
+ */
 static char* read_source_file(const char *filename)
 {
     long int
@@ -96,6 +99,9 @@ static char* read_source_file(const char *filename)
     return src;
 }
 
+/**
+ * initialize OpenCL device
+ */
 int cl_init(int num_values, mvalue_ptr *values, int num_members, member *members, int metric_type)
 {
     int i, j;
