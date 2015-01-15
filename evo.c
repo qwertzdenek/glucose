@@ -30,7 +30,6 @@ evo.c
 #ifdef __MINGW32__
 #ifndef _SC_NPROCESSORS_ONLN
 SYSTEM_INFO info;
-GetSystemInfo(&info);
 #define sysconf(a) info.dwNumberOfProcessors
 #define _SC_NPROCESSORS_ONLN
 #endif
@@ -418,8 +417,10 @@ int evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metri
     float new_fit;
     member op_vec;
     float min_fit;
+    #ifndef __MINGW32__
     struct timespec start;
     struct timespec end;
+    #endif
 
     db_values = values;
     db_size = num_values;
@@ -451,7 +452,9 @@ int evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metri
     // initialize new generation buffer
     memcpy((member *) members_new, (member *) members, sizeof(member) * POPULATION_SIZE);
 
+    #ifndef __MINGW32__
     clock_gettime(CLOCK_REALTIME, &start); // get initial time-stamp
+    #endif
 
     for (i = 0; i < num_generations; i++)
     {
@@ -484,10 +487,12 @@ int evolution_serial(int num_values, mvalue_ptr *values, bounds bconf, int metri
         memcpy((member *) members, (member *) members_new, sizeof(member) * POPULATION_SIZE);
     }
 
+    #ifndef __MINGW32__
     clock_gettime(CLOCK_REALTIME, &end);   // get final time-stamp
 
     *time_used = (double)(end.tv_sec - start.tv_sec) +
                   (double)(end.tv_nsec - start.tv_nsec) * 1.0e-9;
+    #endif
 
     #ifdef _VERBOSE
     printf("\n\n");
@@ -557,6 +562,7 @@ void *work_task(void *par)
     }
 
     pthread_exit(NULL);
+    return NULL;
 }
 
 /**
@@ -569,13 +575,16 @@ int evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metr
     float min_fit;
     pthread_attr_t attr;
     member op_vec;
+    #ifndef __MINGW32__
     struct timespec start;
     struct timespec end;
+    #endif
 
     db_values = values;
     db_size = num_values;
 
     #ifdef _SC_NPROCESSORS_ONLN
+    GetSystemInfo(&info);
     cpu_count = sysconf(_SC_NPROCESSORS_ONLN);
     if (cpu_count < 1)
     {
@@ -629,7 +638,9 @@ int evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metr
     pthread_spin_init(&spin, PTHREAD_PROCESS_PRIVATE);
     pthread_barrier_init(&barrier, NULL, cpu_count);
 
+    #ifndef __MINGW32__
     clock_gettime(CLOCK_REALTIME, &start); // get initial time-stamp
+    #endif
 
     for (k = 0; k < cpu_count; k++)
     {
@@ -641,10 +652,12 @@ int evolution_pthread(int num_values, mvalue_ptr *values, bounds bconf, int metr
         pthread_join(workers[k], NULL);
     }
 
+    #ifndef __MINGW32__
     clock_gettime(CLOCK_REALTIME, &end);   // get final time-stamp
 
     *time_used = (double)(end.tv_sec - start.tv_sec) +
                   (double)(end.tv_nsec - start.tv_nsec) * 1.0e-9;
+    #endif
 
     pthread_attr_destroy(&attr);
     pthread_spin_destroy(&spin);
@@ -675,8 +688,10 @@ int evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metri
     int i;
     member op_vec;
     float min_fit;
+    #ifndef __MINGW32__
     struct timespec start;
     struct timespec end;
+    #endif
 
     memset((void *) &op_vec, 0, sizeof(member));
 
@@ -689,7 +704,9 @@ int evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metri
     if (cl_init(num_values, values, POPULATION_SIZE, members, metric_type) == OPENCL_ERROR)
         return EVO_ERROR;
 
+    #ifndef __MINGW32__
     clock_gettime(CLOCK_REALTIME, &start); // get initial time-stamp
+    #endif
 
     for (i = 0; i < num_generations; i++)
     {
@@ -701,10 +718,12 @@ int evolution_opencl(int num_values, mvalue_ptr *values, bounds bconf, int metri
         #endif // _VERBOSE
     }
 
+    #ifndef __MINGW32__
     clock_gettime(CLOCK_REALTIME, &end);   // get final time-stamp
 
     *time_used = (double)(end.tv_sec - start.tv_sec) +
                   (double)(end.tv_nsec - start.tv_nsec) * 1.0e-9;
+    #endif
 
     #ifdef _VERBOSE
     printf("\n\n");

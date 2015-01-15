@@ -11,9 +11,9 @@ database.c
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sqlite3.h>
 #include <time.h>
 
+#include "sqlite3.h"
 #include "database.h"
 
 mvalue_ptr *db_private;
@@ -26,10 +26,21 @@ mvalue_ptr *db_private;
  * return time in double
  */
 double iso2double(const char *time) {
+    int year, month, date, hour, minute, seconds;
     struct tm tm;
     memset(&tm, 0, sizeof(struct tm));
 
+    #ifdef __MINGW32__
+    sscanf(time, "%d-%d-%dT%d:%d:%d", &year, &month, &date, &hour, &minute, &seconds);
+	tm.tm_year = year - 1900;
+	tm.tm_mon = month - 1;
+	tm.tm_mday = date;
+	tm.tm_hour = hour;
+	tm.tm_min = minute;
+	tm.tm_sec = seconds;
+    #else
     strptime(time, "%Y-%m-%dT%H:%M:%S", &tm);
+    #endif
     time_t tval = mktime(&tm);
 
     const double secsPerDay = 24.0*60.0*60.0;

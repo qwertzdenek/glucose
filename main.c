@@ -173,7 +173,9 @@ int main(int argc, char **argv)
         if (err == EVO_OK)
         {
             printf("Finished %s %s metric with fitness %.4f.\n", methods[method], metrics_name[metric], r.fitness);
+            #ifndef __MINGW32__
             printf("Operation took %.2f seconds.\n", took);
+            #endif
             printf("Found parametres:\np=%f\ncg=%f\nc=%f\npp=%f\ncgp=%f\ncp=%f\ndt=%f\nh=%f\nk=%f\nm=%f\nn=%f\n",
                   r.p,  r.cg,  r.c,  r.pp,  r.cgp,  r.cp,  r.dt,  r.h,  r.k,  r.m,  r.n);
         }

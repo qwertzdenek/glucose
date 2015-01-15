@@ -1,4 +1,4 @@
-/*
+﻿/*
 The MIT License (MIT)
 Copyright (c) 2014 Zdeněk Janeček
 
@@ -300,7 +300,7 @@ int cl_init(int num_values, mvalue_ptr *values, int num_members, member *members
 
 void cl_compute_fitness(long seed)
 {
-    clSetKernelArg(kernel_population, 2, sizeof(uint), &seed);
+    clSetKernelArg(kernel_population, 2, sizeof(cl_uint), &seed);
     clEnqueueNDRangeKernel(command_queue, kernel_population, 1, NULL, one_dim, NULL, 0, NULL, NULL);
     clEnqueueNDRangeKernel(command_queue, kernel_equation, 3, NULL, three_dim, NULL, 0, NULL, NULL);
     clEnqueueNDRangeKernel(command_queue, kernel_avg, 1, NULL, one_dim, NULL, 0, NULL, NULL);
